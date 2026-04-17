@@ -102,53 +102,53 @@ export const Settings = ({ settings, currentAdminName, onSaveSettings, onUpdateP
 
         <div className="md:col-span-3 space-y-6">
           {activeTab === 'Profile' && (
-            <Card className="p-8">
-              <h3 className="text-lg font-bold text-gray-900 mb-8">Admin Profile</h3>
+            <Card className="p-8 shadow-2xl border-primary/5">
+              <h3 className="text-lg font-bold text-gray-900 mb-8 font-serif italic text-xl">My Profile</h3>
               
-              <div className="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-8 mb-8">
-                <div className="w-24 h-24 bg-secondary rounded-2xl flex items-center justify-center text-primary text-3xl font-black shadow-inner">
+              <div className="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-8 mb-8 pb-8 border-b border-gray-50">
+                <div className="w-24 h-24 bg-primary/10 rounded-3xl flex items-center justify-center text-primary text-3xl font-black shadow-sm ring-4 ring-primary/5">
                   {currentAdminName.slice(0, 2).toUpperCase() || 'AD'}
                 </div>
                 <div className="text-center sm:text-left">
-                  <h4 className="text-xl font-bold text-gray-900">{profileData.fullName || currentAdminName || 'Super Admin'}</h4>
-                  <p className="text-sm text-gray-500 font-medium">{profileData.email}</p>
+                  <h4 className="text-2xl font-black text-gray-900 tracking-tight">{currentAdminName || 'Super Admin'}</h4>
+                  <p className="text-sm text-primary font-bold uppercase tracking-widest opacity-40">{profileData.role} Account</p>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Full Name</label>
+                  <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Full Name</label>
                   <input 
                     type="text" 
                     value={profileData.fullName}
                     onChange={(e) => handleInputChange('fullName', e.target.value)}
-                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold focus:bg-white focus:border-primary/20 focus:ring-4 focus:ring-primary/5 outline-none transition-all"
+                    className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:bg-white focus:border-primary/20 focus:ring-4 focus:ring-primary/5 outline-none transition-all shadow-sm"
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Email Address</label>
+                  <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Email Address</label>
                   <input 
                     type="email" 
                     value={profileData.email}
                     onChange={(e) => handleInputChange('email', e.target.value)}
-                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold focus:bg-white focus:border-primary/20 focus:ring-4 focus:ring-primary/5 outline-none transition-all"
+                    className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:bg-white focus:border-primary/20 focus:ring-4 focus:ring-primary/5 outline-none transition-all shadow-sm"
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Role</label>
+                  <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Role</label>
                   <input 
                     type="text" 
                     value={profileData.role}
                     disabled
-                    className="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-xl text-sm font-bold text-gray-500 cursor-not-allowed"
+                    className="w-full px-5 py-4 bg-gray-100 border border-gray-100 rounded-2xl text-sm font-bold text-gray-400 cursor-not-allowed shadow-none"
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Timezone</label>
+                  <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Timezone</label>
                   <select 
                     value={profileData.timezone}
                     onChange={(e) => handleInputChange('timezone', e.target.value)}
-                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold focus:bg-white focus:border-primary/20 focus:ring-4 focus:ring-primary/5 outline-none transition-all"
+                    className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:bg-white focus:border-primary/20 focus:ring-4 focus:ring-primary/5 outline-none transition-all shadow-sm cursor-pointer"
                   >
                     <option>UTC +00:00 (GMT)</option>
                     <option>UTC +05:30 (IST)</option>
@@ -158,74 +158,74 @@ export const Settings = ({ settings, currentAdminName, onSaveSettings, onUpdateP
               </div>
 
                <div className="mt-10 pt-8 border-t border-gray-100 flex justify-end">
-                <Button className="font-bold" disabled={isSaving} onClick={() => handleSave('Profile changes saved successfully!', (prev) => ({ ...prev, profile: profileData }))}>
+                <Button className="font-black px-8 py-4 rounded-2xl shadow-xl shadow-primary/20 uppercase text-xs tracking-widest" disabled={isSaving} onClick={() => handleSave('Profile changes saved successfully!', (prev) => ({ ...prev, profile: profileData }))}>
                   <Save size={18} className="mr-2" />
-                  Save Profile Changes
+                  Update Profile
                 </Button>
               </div>
             </Card>
           )}
 
           {activeTab === 'Security' && (
-            <Card className="p-8">
-              <h3 className="text-lg font-bold text-gray-900 mb-8">Security & Password</h3>
+            <Card className="p-8 shadow-2xl border-primary/5">
+              <h3 className="text-lg font-bold text-gray-900 mb-8 font-serif italic text-xl">Security & Password</h3>
               
               <div className="space-y-6">
                 <div className="space-y-2">
-                  <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Current Password</label>
+                  <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Current Password</label>
                   <div className="relative">
                     <input 
                       type={showCurrentPassword ? 'text' : 'password'} 
-                      placeholder="••••••••" 
+                      placeholder="Enter current password" 
                       value={securityData.currentPassword}
                       onChange={(e) => setSecurityData((prev) => ({ ...prev, currentPassword: e.target.value }))}
-                      className="w-full px-4 py-3 pr-12 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold focus:bg-white focus:border-primary/20 focus:ring-4 focus:ring-primary/5 outline-none transition-all"
+                      className="w-full px-5 py-4 pr-12 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:bg-white focus:border-primary/20 focus:ring-4 focus:ring-primary/5 outline-none transition-all shadow-sm"
                     />
                     <button
                       type="button"
                       onClick={() => setShowCurrentPassword((prev) => !prev)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-primary transition-colors"
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 hover:text-primary transition-colors"
                     >
-                      {showCurrentPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      {showCurrentPassword ? <Eye size={18} /> : <EyeOff size={18} />}
                     </button>
                   </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <label className="text-xs font-black text-gray-400 uppercase tracking-widest">New Password</label>
+                    <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">New Password</label>
                     <div className="relative">
                       <input 
                         type={showNewPassword ? 'text' : 'password'} 
-                        placeholder="••••••••" 
+                        placeholder="Enter new password" 
                         value={securityData.newPassword}
                         onChange={(e) => setSecurityData((prev) => ({ ...prev, newPassword: e.target.value }))}
-                        className="w-full px-4 py-3 pr-12 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold focus:bg-white focus:border-primary/20 focus:ring-4 focus:ring-primary/5 outline-none transition-all"
+                        className="w-full px-5 py-4 pr-12 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:bg-white focus:border-primary/20 focus:ring-4 focus:ring-primary/5 outline-none transition-all shadow-sm"
                       />
                       <button
                         type="button"
                         onClick={() => setShowNewPassword((prev) => !prev)}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-primary transition-colors"
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 hover:text-primary transition-colors"
                       >
-                        {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        {showNewPassword ? <Eye size={18} /> : <EyeOff size={18} />}
                       </button>
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Confirm New Password</label>
+                    <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Confirm New Password</label>
                     <div className="relative">
                       <input 
                         type={showConfirmPassword ? 'text' : 'password'} 
-                        placeholder="••••••••" 
+                        placeholder="Confirm new password" 
                         value={securityData.confirmPassword}
                         onChange={(e) => setSecurityData((prev) => ({ ...prev, confirmPassword: e.target.value }))}
-                        className="w-full px-4 py-3 pr-12 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold focus:bg-white focus:border-primary/20 focus:ring-4 focus:ring-primary/5 outline-none transition-all"
+                        className="w-full px-5 py-4 pr-12 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:bg-white focus:border-primary/20 focus:ring-4 focus:ring-primary/5 outline-none transition-all shadow-sm"
                       />
                       <button
                         type="button"
                         onClick={() => setShowConfirmPassword((prev) => !prev)}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-primary transition-colors"
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 hover:text-primary transition-colors"
                       >
-                        {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        {showConfirmPassword ? <Eye size={18} /> : <EyeOff size={18} />}
                       </button>
                     </div>
                   </div>
@@ -233,13 +233,12 @@ export const Settings = ({ settings, currentAdminName, onSaveSettings, onUpdateP
               </div>
 
               <div className="mt-10 pt-8 border-t border-gray-100 flex justify-between items-center">
-                <div className="flex items-center space-x-2 text-xs font-bold text-gray-400">
+                <div className="flex items-center space-x-2 text-[10px] font-black uppercase tracking-widest text-gray-300">
                   <Shield size={14} />
-                  <span>{settings.security.lastPasswordChangedAt ? `Last changed ${new Date(settings.security.lastPasswordChangedAt).toLocaleDateString()}` : 'Last changed not available'}</span>
+                  <span>{settings.security.lastPasswordChangedAt ? `Last changed ${new Date(settings.security.lastPasswordChangedAt).toLocaleDateString()}` : 'First change required'}</span>
                 </div>
                 <Button
-                  variant="inverted"
-                  className="font-bold"
+                  className="font-black px-8 py-4 rounded-2xl shadow-xl shadow-primary/20 uppercase text-xs tracking-widest"
                   disabled={isSaving}
                   onClick={async () => {
                     const result = await onUpdatePassword(securityData.currentPassword, securityData.newPassword, securityData.confirmPassword);
@@ -257,6 +256,7 @@ export const Settings = ({ settings, currentAdminName, onSaveSettings, onUpdateP
                     }
                   }}
                 >
+                  <Lock size={16} className="mr-2" />
                   Update Password
                 </Button>
               </div>

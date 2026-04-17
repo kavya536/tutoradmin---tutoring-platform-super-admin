@@ -110,7 +110,7 @@ export default function App() {
     
     // Unified Smarter Merger: Ensures no data loss and prefers populated fields
     [...rejectedData, ...legacyData, ...usersData].forEach(t => {
-      const existing = merged.get(t.id) || {};
+      const existing: any = merged.get(t.id) || {};
       
       // Smart Merge: Only overwrite if the new value is truthy and not an empty string
       const mergedTutor: any = { ...existing };
@@ -383,6 +383,13 @@ export default function App() {
     const uid = auth.currentUser?.uid;
     if (!uid) throw new Error('Admin user not found');
     await setDoc(doc(db, 'admin_settings', uid), next, { merge: true });
+    
+    // Also update Firebase Auth Profile to ensure fallbacks and top-bar sync
+    const { updateProfile } = await import('firebase/auth');
+    if (auth.currentUser) {
+      await updateProfile(auth.currentUser, { displayName: next.profile.fullName });
+    }
+    
     setAdminSettings(next);
   };
 
@@ -474,7 +481,7 @@ export default function App() {
           return (
             <Settings
               settings={adminSettings}
-              currentAdminName={auth.currentUser?.displayName || 'Super Admin'}
+              currentAdminName={adminSettings.profile.fullName}
               onSaveSettings={saveAdminSettings}
               onUpdatePassword={updateAdminPassword}
             />
@@ -509,6 +516,7 @@ export default function App() {
         notifications={filteredNotifications}
         onMarkRead={handleMarkRead}
         onContentRef={setContentRef}
+        adminName={adminSettings.profile.fullName}
       >
         {renderPage()}
       </Layout>

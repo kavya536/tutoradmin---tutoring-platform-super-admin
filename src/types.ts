@@ -73,6 +73,8 @@ export interface Booking {
   tutorName: string;
   subject: string;
   dateTime: string;
+  date?: string;
+  time?: string;
   status: 'pending' | 'confirmed' | 'cancelled';
   cancellationReason?: string;
 }

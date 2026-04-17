@@ -23,14 +23,15 @@ import {
   Loader2,
   AlertTriangle,
   ChevronDown,
-  AlertCircle
+  AlertCircle,
+  Eye
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { Card, Badge, Button, Tabs, Table, Modal } from './UI';
 import { Tutor, Student, Booking } from '../types';
 import { storage } from '../firebase';
-import { ref, getDownloadURL } from 'firebase/storage';
+import { ref, getDownloadURL, getBlob } from 'firebase/storage';
 
 interface TutorsManagementProps {
   tutors: Tutor[];
@@ -57,6 +58,7 @@ export const TutorsManagement = ({
   const [rejectionReason, setRejectionReason] = React.useState('');
   const [openMenuId, setOpenMenuId] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
+  const [fullViewDoc, setFullViewDoc] = React.useState<{ url: string, title: string } | null>(null);
 
   const filteredTutors = (tutors || []).filter(t => {
     const matchesTab = activeTab === 'All' || t.status === activeTab.toLowerCase().replace(' approval', '');
@@ -211,14 +213,16 @@ export const TutorsManagement = ({
                 <td className="px-6 py-5">
                   <div className="flex flex-col gap-2">
                     <div className="flex flex-wrap gap-1.5">
-                      {tutor.subjects && tutor.subjects.length > 0 ? (
+                      {Array.isArray(tutor.subjects) && tutor.subjects.length > 0 ? (
                         tutor.subjects.slice(0, 2).map(s => (
                           <span key={s} className="px-2 py-0.5 bg-primary/5 text-primary text-[10px] font-black rounded-md uppercase tracking-tight border border-primary/10">{s}</span>
                         ))
+                      ) : typeof tutor.subjects === 'string' ? (
+                        <span className="px-2 py-0.5 bg-primary/5 text-primary text-[10px] font-black rounded-md uppercase tracking-tight border border-primary/10">{tutor.subjects}</span>
                       ) : (
                         <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] font-black rounded-md uppercase tracking-tight">{tutor.qualification || 'No Subject'}</span>
                       )}
-                      {tutor.subjects && tutor.subjects.length > 2 && (
+                      {Array.isArray(tutor.subjects) && tutor.subjects.length > 2 && (
                         <span className="px-2 py-0.5 bg-gray-100 text-gray-500 text-[10px] font-bold rounded-md">+{tutor.subjects.length - 2}</span>
                       )}
                     </div>
@@ -429,15 +433,19 @@ export const TutorsManagement = ({
                     <Award size={14} /> Subjects & Expertise
                   </h5>
                   <div className="flex flex-wrap gap-2">
-                    {selectedTutor.subjects && selectedTutor.subjects.length > 0 ? (
+                    {Array.isArray(selectedTutor.subjects) && selectedTutor.subjects.length > 0 ? (
                       selectedTutor.subjects.map(s => (
                         <div key={s} className="px-4 py-2 bg-primary/5 text-primary rounded-xl font-black text-xs uppercase tracking-tight border border-primary/10">
                           {s}
                         </div>
                       ))
+                    ) : typeof selectedTutor.subjects === 'string' ? (
+                      <div className="px-4 py-2 bg-primary/5 text-primary rounded-xl font-black text-xs uppercase tracking-tight border border-primary/10">
+                        {selectedTutor.subjects}
+                      </div>
                     ) : (
                       <div className="px-4 py-2 bg-gray-100 text-gray-500 rounded-xl font-black text-xs uppercase tracking-tight">
-                        General Tutoring
+                        {selectedTutor.qualification || 'General Tutoring'}
                       </div>
                     )}
                   </div>
@@ -460,22 +468,25 @@ export const TutorsManagement = ({
                       title="Identity Proof"
                       subtitle="Aadhaar / PAN Card"
                       icon={<Image size={18} />}
-                      url={selectedTutor.identityPic || selectedTutor.documents?.identityProof || selectedTutor.identityProof || selectedTutor.identityURL || selectedTutor.idCard || selectedTutor.aadharURL}
+                      url={selectedTutor.identityPic || selectedTutor.documents?.identityProof || selectedTutor.identityProof || selectedTutor.identityURL || selectedTutor.idCard || selectedTutor.aadharURL || ''}
                       type="image"
+                      onViewFull={setFullViewDoc}
                     />
                     <VerificationCard 
                       title="Degree Certificate"
                       subtitle="Academic Qualification"
                       icon={<GraduationCap size={18} />}
-                      url={selectedTutor.educationCert || selectedTutor.documents?.degreeCertificate || selectedTutor.degreeCertificate || selectedTutor.degreeURL || selectedTutor.qualificationDoc || selectedTutor.educationURL}
+                      url={selectedTutor.educationCert || selectedTutor.documents?.degreeCertificate || selectedTutor.degreeCertificate || selectedTutor.degreeURL || selectedTutor.qualificationDoc || selectedTutor.educationURL || ''}
                       type="pdf"
+                      onViewFull={setFullViewDoc}
                     />
                     <VerificationCard 
                       title="Experience Certificate"
                       subtitle="Professional Records"
                       icon={<Award size={18} />}
-                      url={selectedTutor.experienceCert || selectedTutor.documents?.experienceCertificate || selectedTutor.experienceCertificate || selectedTutor.certificate || selectedTutor.certURL || selectedTutor.expDoc || selectedTutor.expURL}
+                      url={selectedTutor.experienceCert || selectedTutor.documents?.experienceCertificate || selectedTutor.experienceCertificate || selectedTutor.certificate || selectedTutor.certURL || selectedTutor.expDoc || selectedTutor.expURL || ''}
                       type="pdf"
+                      onViewFull={setFullViewDoc}
                     />
                     <div className="pt-4 border-t border-gray-100">
                        <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Other Detected Links:</h5>
@@ -624,24 +635,27 @@ export const TutorsManagement = ({
                   title="Identity Proof"
                   subtitle="Aadhaar / PAN Card"
                   icon={<Image size={18} />}
-                  url={verifyingTutor.identityPic || verifyingTutor.documents?.identityProof || verifyingTutor.identityProof || verifyingTutor.identityURL || verifyingTutor.idCard || verifyingTutor.aadharURL}
+                  url={verifyingTutor.identityPic || verifyingTutor.documents?.identityProof || verifyingTutor.identityProof || verifyingTutor.identityURL || verifyingTutor.idCard || verifyingTutor.aadharURL || ''}
                   type="image"
+                  onViewFull={setFullViewDoc}
                 />
                 {/* DEGREE */}
                 <VerificationCard 
                   title="Degree Certificate"
                   subtitle="Educational Qualification"
                   icon={<GraduationCap size={18} />}
-                  url={verifyingTutor.educationCert || verifyingTutor.documents?.degreeCertificate || verifyingTutor.degreeCertificate || verifyingTutor.degreeURL || verifyingTutor.qualificationDoc || verifyingTutor.educationURL}
+                  url={verifyingTutor.educationCert || verifyingTutor.documents?.degreeCertificate || verifyingTutor.degreeCertificate || verifyingTutor.degreeURL || verifyingTutor.qualificationDoc || verifyingTutor.educationURL || ''}
                   type="pdf"
+                  onViewFull={setFullViewDoc}
                 />
                 {/* EXPERIENCE */}
                 <VerificationCard 
                   title="Experience Certificate"
                   subtitle="Professional Records"
                   icon={<Award size={18} />}
-                  url={verifyingTutor.experienceCert || verifyingTutor.documents?.experienceCertificate || verifyingTutor.experienceCertificate || verifyingTutor.certificate || verifyingTutor.certURL || verifyingTutor.expDoc || verifyingTutor.expURL}
+                  url={verifyingTutor.experienceCert || verifyingTutor.documents?.experienceCertificate || verifyingTutor.experienceCertificate || verifyingTutor.certificate || verifyingTutor.certURL || verifyingTutor.expDoc || verifyingTutor.expURL || ''}
                   type="pdf"
+                  onViewFull={setFullViewDoc}
                 />
               </div>
             </div>
@@ -754,6 +768,61 @@ export const TutorsManagement = ({
         )}
       </Modal>
 
+      {/* FULL SCREEN DOCUMENT VIEWER (The "Real PDF" Experience) */}
+      <Modal
+        isOpen={!!fullViewDoc}
+        onClose={() => setFullViewDoc(null)}
+        title={`Full Document View: ${fullViewDoc?.title || ''}`}
+        size="6xl"
+      >
+        <div className="bg-slate-900 -mx-6 -mb-6 p-4 md:p-10 min-h-[70vh] flex flex-col items-center">
+          <div className="w-full max-w-4xl space-y-6">
+            {fullViewDoc && [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20].map((page) => {
+              // Deep Clean the URL to remove any existing transformations (like pg_1)
+              // so that pg_N works correctly for every page.
+              let baseUrl = fullViewDoc.url;
+              if (baseUrl.includes('/upload/')) {
+                const parts = baseUrl.split('/upload/');
+                const pathSegments = parts[1].split('/');
+                const cleanSegments = pathSegments.filter(seg => 
+                  !seg.includes(',') && !seg.startsWith('pg_') && !seg.startsWith('fl_') && seg !== 'pg_1'
+                );
+                baseUrl = `${parts[0]}/upload/${cleanSegments.join('/')}`;
+              }
+              
+              const pageUrl = baseUrl.includes('cloudinary')
+                ? baseUrl.replace('/upload/', `/upload/pg_${page},q_auto,f_auto/`).replace(/\.pdf$/i, '.jpg')
+                : baseUrl;
+
+              return (
+                <div key={page} className="relative bg-white shadow-2xl rounded-sm overflow-hidden min-h-[100px]">
+                  <div className="absolute top-4 left-4 z-50 bg-black/60 backdrop-blur-md text-white text-[9px] font-black px-3 py-1.5 rounded-lg border border-white/10 shadow-lg">
+                    PAGE {page}
+                  </div>
+                  <img 
+                    src={pageUrl}
+                    alt={`Document Page ${page}`}
+                    className="w-full h-auto object-contain block"
+                    loading="lazy"
+                    onError={(e) => {
+                      const container = (e.target as HTMLElement).closest('.relative');
+                      if (container) (container as HTMLElement).style.display = 'none';
+                    }}
+                  />
+                </div>
+              );
+            })}
+            
+            <div className="py-12 text-center">
+              <div className="inline-flex items-center gap-3 px-6 py-2 bg-white/10 rounded-full border border-white/5">
+                <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                <p className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">End of Verified Document</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Modal>
+
       {/* Rejection Modal */}
       <Modal
         isOpen={rejectionModal.isOpen}
@@ -795,17 +864,19 @@ export const TutorsManagement = ({
 };
 
 // Helper Component for Verification Cards
-function VerificationCard({ title, subtitle, icon, url: initialUrl, type }: { 
-  title: string; 
-  subtitle: string; 
-  icon: React.ReactNode; 
-  url: string | undefined; 
-  type: 'image' | 'pdf' | 'video' 
-}) {
+interface VerificationCardProps {
+  title: string;
+  subtitle: string;
+  icon: React.ReactNode;
+  url: string;
+  type: 'image' | 'pdf' | 'video';
+  onViewFull: (data: { url: string, title: string }) => void;
+}
+
+const VerificationCard = ({ title, subtitle, icon, url: initialUrl, type, onViewFull }: VerificationCardProps) => {
   const [url, setUrl] = React.useState(initialUrl);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState(false);
-  const [pdfPage, setPdfPage] = React.useState(1); // Tracker for multi-page Cloudinary PDFs
 
   React.useEffect(() => {
     if (initialUrl && !initialUrl.startsWith('http') && initialUrl.includes('/')) {
@@ -856,16 +927,7 @@ function VerificationCard({ title, subtitle, icon, url: initialUrl, type }: {
           {url && (
             <button 
               onClick={() => {
-                // We use an anchor element with noopener/noreferrer to tell Chrome 
-                // this is a safe, trusted external link. We also add a timestamp
-                // to bypass any cached security error pages.
-                const link = document.createElement('a');
-                link.href = url + (url.includes('?') ? '&' : '?') + 'view_id=' + Date.now();
-                link.target = '_blank';
-                link.rel = 'noopener noreferrer';
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
+                onViewFull({ url: url, title: title });
               }}
               className="p-2 text-gray-400 hover:text-primary hover:bg-primary/5 rounded-xl transition-all border border-gray-100 shadow-sm"
               title="View Full Document (All Pages)"
@@ -908,24 +970,71 @@ function VerificationCard({ title, subtitle, icon, url: initialUrl, type }: {
         ) : isPDF ? (
           <div className="w-full h-full flex flex-col pt-3">
              <div className="flex justify-between items-center px-4 pb-2 border-b border-gray-100">
-               <div className="flex items-center gap-3">
-                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none">Continuous Scroll View</span>
-                  <Badge variant="info" className="text-[8px] py-0 h-4 bg-primary/5 text-primary border-primary/10 tracking-widest px-2">Multi-page</Badge>
+                <div className="flex items-center gap-3">
+                  <Badge variant="info" className="text-[8px] py-0 h-4 bg-primary/5 text-primary border-primary/10 tracking-widest px-2 uppercase">Multi-page Doc</Badge>
                 </div>
-                           <Button 
-                  size="sm"
-                  variant="outline"
-                  className="h-7 text-[10px] px-3 font-bold"
-                  onClick={() => {
-                     // Simply force a download on the original link
-                     const dlUrl = url.includes('/upload/') 
-                       ? url.replace('/upload/', '/upload/fl_attachment/') 
-                       : url;
-                     window.open(dlUrl, '_blank');
-                  }}
-                >
-                  Download Full PDF
-                </Button>
+                           <div className="flex items-center gap-2">
+                  <Button 
+                    size="sm"
+                    variant="info"
+                    className="h-7 text-[10px] px-3 font-bold bg-primary/10 text-primary border-primary/20 hover:bg-primary/20"
+                    onClick={() => onViewFull({ url: url, title: title })}
+                  >
+                    <Eye size={12} className="mr-1" />
+                    View Document
+                  </Button>
+
+                  <Button 
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-[10px] px-3 font-bold"
+                    onClick={async (e) => {
+                       const btn = e.currentTarget;
+                       const originalText = btn.innerHTML;
+                       try {
+                         btn.disabled = true;
+                         btn.innerHTML = '<span class="animate-pulse">Fetching...</span>';
+                         
+                         if (initialUrl && !initialUrl.startsWith('http')) {
+                            // CASE 1: NATIVE FIREBASE STORAGE
+                            const storageRef = ref(storage, initialUrl);
+                            const blob = await getBlob(storageRef);
+                            const blobUrl = window.URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = blobUrl;
+                            a.download = `${title.replace(/\s+/g, '_')}_Verified.pdf`;
+                            document.body.appendChild(a);
+                            a.click();
+                            window.URL.revokeObjectURL(blobUrl);
+                            document.body.removeChild(a);
+                         } else {
+                            // CASE 2: CLOUDINARY OR OTHER PUBLIC URL
+                            let finalUrl = url;
+                            if (url && url.includes('cloudinary')) {
+                               // Inject flags to force a raw PDF download
+                               if (url.includes('/image/upload/')) {
+                                  finalUrl = url.replace('/image/upload/', '/raw/upload/fl_attachment/');
+                               } else {
+                                  finalUrl = url.replace('/upload/', '/upload/fl_attachment/');
+                               }
+                               // Ensure file extension is pdf
+                               finalUrl = finalUrl.replace(/\.[^/.]+$/, ".pdf");
+                            }
+                            window.location.assign(finalUrl || '');
+                         }
+                       } catch (err) {
+                         console.error("Direct download failed, falling back to tab:", err);
+                         window.open(url || '', '_blank');
+                       } finally {
+                         btn.disabled = false;
+                         btn.innerHTML = originalText;
+                       }
+                    }}
+                  >
+                    <Download size={12} className="mr-1" />
+                    Download PDF
+                  </Button>
+                </div>
              </div>
 
             <div className="w-full flex-1 bg-gray-900/5 overflow-y-auto p-4 space-y-4 custom-scrollbar scroll-smooth">
@@ -954,11 +1063,8 @@ function VerificationCard({ title, subtitle, icon, url: initialUrl, type }: {
               </div>
             </div>
             
-            <div className="p-2 px-4 bg-white border-t border-gray-100 flex justify-between items-center">
-               <p className="text-[9px] text-gray-400 font-medium italic">
-                 Scroll to see all pages
-               </p>
-               <span className="text-[9px] font-black text-primary/50 uppercase tracking-tighter">Powered by Cloudinary Render</span>
+            <div className="p-2 px-4 bg-white border-t border-gray-100 flex justify-end items-center">
+               <span className="text-[9px] font-black text-primary/10 uppercase tracking-tighter">Verified Link</span>
             </div>
           </div>
         ) : (

@@ -30,9 +30,21 @@ interface LayoutProps {
   notifications: Notification[];
   onMarkRead: (id: string) => void;
   onContentRef?: (ref: React.RefObject<HTMLDivElement>) => void;
+  adminName?: string;
+  adminAvatar?: string;
 }
 
-export const Layout = ({ children, activePage, setActivePage, onLogout, notifications, onMarkRead, onContentRef }: LayoutProps) => {
+export const Layout = ({ 
+  children, 
+  activePage, 
+  setActivePage, 
+  onLogout, 
+  notifications, 
+  onMarkRead, 
+  onContentRef,
+  adminName = 'Super Admin',
+  adminAvatar
+}: LayoutProps) => {
   const navigate = useNavigate();
   const location = useLocation();
   const contentRef = React.useRef<HTMLDivElement>(null);
@@ -193,7 +205,7 @@ export const Layout = ({ children, activePage, setActivePage, onLogout, notifica
                             <div className="flex items-start space-x-3">
                               <div className={cn(
                                 'w-2 h-2 mt-1.5 rounded-full flex-shrink-0',
-                                n.read ? 'bg-gray-300' : 'bg-primary animate-pulse'
+                                n.read ? 'bg-gray-300' : 'bg-primary'
                               )} />
                               <div>
                                 <p className={cn("text-sm text-gray-900", n.read ? "font-medium" : "font-black")}>{n.title}</p>
@@ -216,11 +228,11 @@ export const Layout = ({ children, activePage, setActivePage, onLogout, notifica
                 onClick={() => setShowProfile(!showProfile)}
                 className="flex items-center space-x-2 sm:space-x-3 pl-2 pr-1 py-1 hover:bg-gray-100 rounded-xl transition-all"
               >
-                <div className="w-8 h-8 sm:w-9 sm:h-9 bg-secondary rounded-lg flex items-center justify-center text-primary font-bold shadow-inner text-xs sm:text-sm">
-                  AD
+                <div className="w-8 h-8 sm:w-9 sm:h-9 bg-primary/10 rounded-lg flex items-center justify-center text-primary font-black shadow-inner text-xs sm:text-sm">
+                  {adminName.slice(0, 2).toUpperCase()}
                 </div>
                 <div className="text-left hidden md:block">
-                  <p className="text-sm font-bold text-gray-900 leading-tight">Super Admin</p>
+                  <p className="text-sm font-bold text-gray-900 leading-tight">{adminName}</p>
                   <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Administrator</p>
                 </div>
                 <ChevronDown size={16} className="text-gray-400" />
