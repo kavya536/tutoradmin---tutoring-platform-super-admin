@@ -4,8 +4,6 @@ import {
   Filter, 
   MoreVertical, 
   Eye, 
-  Ban, 
-  CheckCircle2,
   Mail,
   GraduationCap,
   Calendar,
@@ -13,14 +11,15 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Card, Badge, Button, Table, Modal } from './UI';
-import { Student } from '../types';
+import { Student, Booking } from '../types';
 
 interface StudentsManagementProps {
   students: Student[];
+  bookings: Booking[];
   onToggleBlock: (id: string) => void;
 }
 
-export const StudentsManagement = ({ students, onToggleBlock }: StudentsManagementProps) => {
+export const StudentsManagement = ({ students, bookings, onToggleBlock }: StudentsManagementProps) => {
   const [selectedStudent, setSelectedStudent] = React.useState<Student | null>(null);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [symbolName, setSymbolName] = React.useState<string | null>(null);
@@ -35,6 +34,46 @@ export const StudentsManagement = ({ students, onToggleBlock }: StudentsManageme
     setSymbolName(`${action} for ${studentName}`);
     setTimeout(() => setSymbolName(null), 3000);
     setOpenMenuId(null);
+  };
+
+  const parseBookingDate = (booking: any) => {
+    if (booking?.dateTime) {
+      const ts = new Date(booking.dateTime).getTime();
+      return Number.isNaN(ts) ? 0 : ts;
+    }
+    if (booking?.date && booking?.time) {
+      const ts = new Date(`${booking.date} ${booking.time}`).getTime();
+      return Number.isNaN(ts) ? 0 : ts;
+    }
+    if (booking?.date) {
+      const ts = new Date(booking.date).getTime();
+      return Number.isNaN(ts) ? 0 : ts;
+    }
+    return 0;
+  };
+
+  const formatBookingDate = (booking: any) => {
+    const dateMs = parseBookingDate(booking);
+    if (!dateMs) return 'Date unavailable';
+    return new Date(dateMs).toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit'
+    });
+  };
+
+  const getStudentActivity = (student: Student) => {
+    return bookings
+      .filter((b: any) =>
+        b.studentId === student.id ||
+        b.studentEmail === student.email ||
+        b.studentName === student.name ||
+        b.name === student.name
+      )
+      .sort((a: any, b: any) => parseBookingDate(b) - parseBookingDate(a))
+      .slice(0, 8);
   };
 
   const itemVariants = {
@@ -108,7 +147,9 @@ export const StudentsManagement = ({ students, onToggleBlock }: StudentsManageme
       <Card>
         <Table headers={['Student', 'Class', 'Subjects', 'Bookings', 'Status', 'Actions']}>
           <AnimatePresence mode="popLayout">
-            {filteredStudents.map((student, index) => (
+            {filteredStudents.map((student, index) => {
+              const isMenuOpen = openMenuId === student.id;
+              return (
               <motion.tr 
                 key={student.id} 
                 variants={itemVariants}
@@ -116,11 +157,20 @@ export const StudentsManagement = ({ students, onToggleBlock }: StudentsManageme
                 animate="visible"
                 exit={{ opacity: 0, scale: 0.95, filter: 'blur(8px)' }}
                 layout
-                className="hover:bg-gray-50/80 transition-all group cursor-default border-b border-gray-100 last:border-0"
+                className={`hover:bg-gray-50/80 transition-all group cursor-default border-b border-gray-100 last:border-0 ${
+                  isMenuOpen ? 'relative z-[140]' : 'relative z-0'
+                }`}
               >
               <td className="px-4 sm:px-6 py-3 sm:py-4">
                 <div className="flex items-center space-x-3">
-                  <img src={student.avatar} alt={student.name} className="w-10 h-10 rounded-full object-cover border-2 border-white shadow-sm group-hover:scale-110 transition-transform" />
+                   <img 
+                    src={student.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(student.name)}&background=random&color=fff`} 
+                    alt={student.name} 
+                    className="w-10 h-10 rounded-full object-cover border-2 border-white shadow-sm group-hover:scale-110 transition-transform" 
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(student.name)}&background=random&color=fff`;
+                    }}
+                  />
                   <div>
                     <p className="text-sm font-bold text-gray-900">{student.name}</p>
                     <p className="text-xs text-gray-500 font-medium">{student.email}</p>
@@ -132,7 +182,7 @@ export const StudentsManagement = ({ students, onToggleBlock }: StudentsManageme
               </td>
               <td className="px-4 sm:px-6 py-3 sm:py-4">
                 <div className="flex flex-wrap gap-1">
-                  {student.subjects.map(s => (
+                  {(student.subjects || []).map(s => (
                     <span key={s} className="px-2 py-0.5 bg-blue-50 text-blue-600 text-[10px] font-bold rounded-md">
                       {s}
                     </span>
@@ -141,36 +191,18 @@ export const StudentsManagement = ({ students, onToggleBlock }: StudentsManageme
               </td>
               <td className="px-4 sm:px-6 py-3 sm:py-4">
                 <div className="flex items-center space-x-2">
-                  <span className="text-sm font-black text-gray-900">{student.totalBookings}</span>
+                  <span className="text-sm font-black text-gray-900">{student.totalBookings || 0}</span>
                   <span className="text-[10px] font-bold text-gray-400 uppercase">Total</span>
                 </div>
               </td>
               <td className="px-4 sm:px-6 py-3 sm:py-4">
-                <Badge variant={student.status === 'active' ? 'success' : 'danger'}>
-                  {student.status}
+                <Badge variant={(student.status || 'active') === 'active' ? 'success' : 'danger'}>
+                  {student.status || 'active'}
                 </Badge>
               </td>
               <td className="px-4 sm:px-6 py-3 sm:py-4">
                 <div className="flex items-center space-x-2">
-                  <Button variant="ghost" size="icon" onClick={() => setSelectedStudent(student)}>
-                    <Eye size={18} />
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className={student.status === 'active' ? 'text-red-500 hover:bg-red-50' : 'text-green-500 hover:bg-green-50'}
-                    onClick={() => {
-                      if (student.status === 'active') {
-                        setSymbolName('Block Student');
-                      } else {
-                        setSymbolName('Unblock Student');
-                      }
-                      onToggleBlock(student.id);
-                    }}
-                  >
-                    {student.status === 'active' ? <Ban size={18} /> : <CheckCircle2 size={18} />}
-                  </Button>
-                  <div className="relative">
+                  <div className={isMenuOpen ? "relative z-[160]" : "relative"}>
                     <Button 
                       variant="ghost" 
                       size="icon" 
@@ -180,50 +212,27 @@ export const StudentsManagement = ({ students, onToggleBlock }: StudentsManageme
                     </Button>
                     
                     <AnimatePresence>
-                      {openMenuId === student.id && (
+                      {isMenuOpen && (
                         <>
-                          <motion.div 
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            className="fixed inset-0 z-10" 
-                            onClick={() => setOpenMenuId(null)} 
+                          {/* Backdrop to close menu */}
+                          <div 
+                            className="fixed inset-0 z-[90] bg-black/20 backdrop-blur-[1px]" 
+                            onClick={() => setOpenMenuId(null)}
                           />
+
                           <motion.div 
                             variants={menuVariants}
                             initial="hidden"
                             animate="visible"
                             exit="exit"
-                            className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-2xl border border-gray-100 py-2 z-20 overflow-hidden"
+                            className="absolute right-0 mt-2 w-52 bg-white rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-gray-100 py-2.5 z-[200] ring-1 ring-black/[0.05] overflow-hidden"
                           >
                             <button 
                               onClick={() => { setSelectedStudent(student); setOpenMenuId(null); }}
-                              className="w-full px-4 py-2 text-left text-sm font-bold text-gray-700 hover:bg-gray-50 flex items-center space-x-2 transition-colors"
+                              className="w-full px-4 py-2.5 text-left text-sm font-bold text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
                             >
-                              <Eye size={14} />
+                              <Eye size={16} className="text-gray-400" />
                               <span>View Profile</span>
-                            </button>
-                            <button 
-                              onClick={() => handleAction('Viewing Booking History', student.name)}
-                              className="w-full px-4 py-2 text-left text-sm font-bold text-gray-700 hover:bg-gray-50 flex items-center space-x-2 transition-colors"
-                            >
-                              <Calendar size={14} />
-                              <span>Booking History</span>
-                            </button>
-                            <button 
-                              onClick={() => handleAction('Sending Notification', student.name)}
-                              className="w-full px-4 py-2 text-left text-sm font-bold text-gray-700 hover:bg-gray-50 flex items-center space-x-2 transition-colors"
-                            >
-                              <Mail size={14} />
-                              <span>Send Notification</span>
-                            </button>
-                            <div className="h-px bg-gray-100 my-1" />
-                            <button 
-                              onClick={() => { onToggleBlock(student.id); setOpenMenuId(null); }}
-                              className="w-full px-4 py-2 text-left text-sm font-bold text-red-600 hover:bg-red-50 flex items-center space-x-2 transition-colors"
-                            >
-                              <Ban size={14} />
-                              <span>{student.status === 'active' ? 'Block Account' : 'Unblock Account'}</span>
                             </button>
                           </motion.div>
                         </>
@@ -233,7 +242,8 @@ export const StudentsManagement = ({ students, onToggleBlock }: StudentsManageme
                 </div>
               </td>
             </motion.tr>
-          ))}
+            );
+            })}
           </AnimatePresence>
         </Table>
       </Card>
@@ -263,7 +273,14 @@ export const StudentsManagement = ({ students, onToggleBlock }: StudentsManageme
         {selectedStudent && (
           <div className="space-y-8">
             <div className="flex items-center space-x-6">
-              <img src={selectedStudent.avatar} alt={selectedStudent.name} className="w-24 h-24 rounded-2xl object-cover border-4 border-gray-50 shadow-lg" />
+               <img 
+                src={selectedStudent.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedStudent.name)}&background=random&color=fff`} 
+                alt={selectedStudent.name} 
+                className="w-24 h-24 rounded-2xl object-cover border-4 border-gray-50 shadow-lg" 
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedStudent.name)}&background=random&color=fff`;
+                }}
+              />
               <div>
                 <h4 className="text-2xl font-black text-gray-900 tracking-tight">{selectedStudent.name}</h4>
                 <div className="flex flex-col space-y-1 mt-2">
@@ -286,7 +303,7 @@ export const StudentsManagement = ({ students, onToggleBlock }: StudentsManageme
                   <div>
                     <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Interested Subjects</p>
                     <div className="flex flex-wrap gap-2">
-                      {selectedStudent.subjects.map(s => (
+                      {(selectedStudent.subjects || []).map(s => (
                         <span key={s} className="px-3 py-1 bg-white text-blue-600 rounded-lg font-bold text-sm shadow-sm">
                           {s}
                         </span>
@@ -306,16 +323,30 @@ export const StudentsManagement = ({ students, onToggleBlock }: StudentsManageme
               </Card>
 
               <div className="space-y-4">
-                <h5 className="text-xs font-black text-gray-400 uppercase tracking-widest">Quick Actions</h5>
-                <Button 
-                  variant={selectedStudent.status === 'active' ? 'danger' : 'primary'} 
-                  className="w-full"
-                  onClick={() => { onToggleBlock(selectedStudent.id); setSelectedStudent(null); }}
-                >
-                  {selectedStudent.status === 'active' ? 'Block Student Account' : 'Unblock Student Account'}
-                </Button>
-                <Button variant="outline" className="w-full" onClick={() => handleAction('Viewing Booking History', selectedStudent.name)}>View Booking History</Button>
-                <Button variant="outline" className="w-full" onClick={() => handleAction('Sending Notification', selectedStudent.name)}>Send Notification</Button>
+                <h5 className="text-xs font-black text-gray-400 uppercase tracking-widest">Recent Activity</h5>
+                <Card className="p-4 bg-gray-50 border-0 max-h-72 overflow-y-auto">
+                  {getStudentActivity(selectedStudent).length > 0 ? (
+                    <div className="space-y-3">
+                      {getStudentActivity(selectedStudent).map((activity: any) => (
+                        <div key={activity.id} className="p-3 bg-white rounded-xl border border-gray-100">
+                          <p className="text-sm font-bold text-gray-900">
+                            {activity.subject || 'Session'} with {activity.tutorName || 'Tutor'}
+                          </p>
+                          <div className="mt-1 flex items-center justify-between">
+                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                              {formatBookingDate(activity)}
+                            </span>
+                            <Badge variant={activity.status === 'confirmed' || activity.status === 'completed' ? 'success' : activity.status === 'cancelled' ? 'danger' : 'pending'}>
+                              {activity.status || 'pending'}
+                            </Badge>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500 font-medium">No activity found for this student yet.</p>
+                  )}
+                </Card>
               </div>
             </div>
           </div>

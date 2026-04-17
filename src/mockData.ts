@@ -14,7 +14,7 @@ export const MOCK_TUTORS: Tutor[] = [
     documents: [
       { name: 'Degree Certificate', status: 'verified' },
       { name: 'ID Proof', status: 'verified' }
-    ]
+    ] as any
   },
   {
     id: '2',
@@ -29,7 +29,7 @@ export const MOCK_TUTORS: Tutor[] = [
     documents: [
       { name: 'Masters Degree', status: 'pending' },
       { name: 'Teaching License', status: 'pending' }
-    ]
+    ] as any
   },
   {
     id: '3',
@@ -44,7 +44,7 @@ export const MOCK_TUTORS: Tutor[] = [
     documents: [
       { name: 'Language Proficiency', status: 'verified' },
       { name: 'Work Permit', status: 'verified' }
-    ]
+    ] as any
   },
   {
     id: '4',
@@ -58,7 +58,7 @@ export const MOCK_TUTORS: Tutor[] = [
     joinedDate: '2023-12-05',
     documents: [
       { name: 'B.Tech Certificate', status: 'verified' }
-    ]
+    ] as any
   }
 ];
 

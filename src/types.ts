@@ -11,13 +11,48 @@ export interface Tutor {
   id: string;
   name: string;
   email: string;
-  subjects: string[];
+  phone?: string;
+  // Registration stores qualification (not subjects array)
+  qualification?: string;
+  subjects?: string[];
   experience: string;
   status: 'pending' | 'approved' | 'rejected';
-  bio: string;
-  avatar: string;
-  joinedDate: string;
-  documents: { name: string; status: 'verified' | 'pending' }[];
+  bio?: string;
+  avatar?: string;
+  joinedDate?: string;
+  createdAt?: any;
+  // Documents stored as URLs in Firestore (including various fallback names)
+  identityProof?: string;
+  identityURL?: string;
+  identityPic?: string; // Fallback
+  aadharURL?: string; // Fallback
+  idCard?: string;
+  certificate?: string; // Legacy field
+  certURL?: string;
+  experienceCertificate?: string;
+  experienceCert?: string; // Fallback
+  expDoc?: string;
+  expURL?: string; // Fallback
+  degreeCertificate?: string;
+  degreeURL?: string;
+  educationURL?: string; // Fallback
+  educationCert?: string; // Fallback
+  qualificationDoc?: string;
+  demoVideo?: string;
+  videoURL?: string;
+  demoURL?: string; // Fallback
+  liveVideo?: string; // Fallback
+  documents?: {
+    profileImage?: string;
+    identityProof?: string;
+    degreeCertificate?: string;
+    experienceCertificate?: string;
+    demoVideo?: string;
+  };
+  rating?: number;
+  rejectionReason?: string;
+  rejectedAt?: any;
+  approvedAt?: any;
 }
 
 export interface Student {
@@ -67,4 +102,36 @@ export interface Notification {
   time: string;
   type: 'info' | 'warning' | 'success';
   read: boolean;
+}
+
+export interface AdminSettingsData {
+  profile: {
+    fullName: string;
+    email: string;
+    role: string;
+    timezone: string;
+  };
+  notifications: {
+    emailNotifications: boolean;
+    pushNotifications: boolean;
+    newTutorApplications: boolean;
+    bookingConfirmations: boolean;
+    inAppAlerts: boolean;
+  };
+  permissions: {
+    manageTutors: boolean;
+    manageStudents: boolean;
+    viewFinancials: boolean;
+    systemSettings: boolean;
+    userSupport: boolean;
+    contentModeration: boolean;
+  };
+  general: {
+    platformLanguage: string;
+    currency: string;
+    maintenanceMode: boolean;
+  };
+  security: {
+    lastPasswordChangedAt: string;
+  };
 }

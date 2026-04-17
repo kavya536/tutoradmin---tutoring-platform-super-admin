@@ -44,7 +44,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 
 // Card
 export const Card = ({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn('bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden', className)} {...props}>
+  <div className={cn('bg-white rounded-xl border border-gray-200 shadow-sm relative', className)} {...props}>
     {children}
   </div>
 );
@@ -52,10 +52,12 @@ export const Card = ({ className, children, ...props }: React.HTMLAttributes<HTM
 // Badge
 export const Badge = ({ 
   children, 
-  variant = 'default' 
+  variant = 'default',
+  className
 }: { 
   children: React.ReactNode; 
-  variant?: 'default' | 'success' | 'warning' | 'danger' | 'info' 
+  variant?: 'default' | 'success' | 'warning' | 'danger' | 'info';
+  className?: string;
 }) => {
   const variants = {
     default: 'bg-gray-100 text-gray-700',
@@ -66,7 +68,7 @@ export const Badge = ({
   };
 
   return (
-    <span className={cn('px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider', variants[variant])}>
+    <span className={cn('px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider', variants[variant], className)}>
       {children}
     </span>
   );
@@ -77,43 +79,54 @@ export const Modal = ({
   isOpen, 
   onClose, 
   title, 
-  children 
+  children,
+  size = '2xl'
 }: { 
   isOpen: boolean; 
   onClose: () => void; 
   title: string; 
-  children: React.ReactNode 
-}) => (
-  <AnimatePresence>
-    {isOpen && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={onClose}
-          className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-        />
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 20 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 20 }}
-          className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
-        >
-          <div className="flex items-center justify-between p-6 border-bottom border-gray-100">
-            <h3 className="text-xl font-bold text-gray-900">{title}</h3>
-            <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
-              <X size={20} className="text-gray-500" />
-            </button>
-          </div>
-          <div className="p-6 overflow-y-auto">
-            {children}
-          </div>
-        </motion.div>
-      </div>
-    )}
-  </AnimatePresence>
-);
+  children: React.ReactNode;
+  size?: 'md' | 'lg' | '2xl' | '4xl' | '6xl';
+}) => {
+  const sizes = {
+    md: 'max-w-md',
+    lg: 'max-w-lg',
+    '2xl': 'max-w-2xl',
+    '4xl': 'max-w-4xl',
+    '6xl': 'max-w-6xl',
+  };
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+          />
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            className={cn("relative w-full bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]", sizes[size])}
+          >
+            <div className="flex items-center justify-between p-6 border-bottom border-gray-100">
+              <h3 className="text-xl font-bold text-gray-900">{title}</h3>
+              <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+                <X size={20} className="text-gray-500" />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto">
+              {children}
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+};
 
 // Tabs
 export const Tabs = ({ 
@@ -148,12 +161,14 @@ export const Tabs = ({
 // Table
 export const Table = ({ 
   headers, 
-  children 
+  children,
+  className
 }: { 
   headers: string[]; 
-  children: React.ReactNode 
+  children: React.ReactNode;
+  className?: string;
 }) => (
-  <div className="overflow-x-auto no-scrollbar">
+  <div className={cn("overflow-x-auto no-scrollbar", className)}>
     <table className="w-full text-left border-collapse min-w-max md:min-w-0">
       <thead>
         <tr className="border-b border-gray-100 bg-gray-50/50">

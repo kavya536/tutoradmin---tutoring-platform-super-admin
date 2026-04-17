@@ -70,15 +70,15 @@ export const Reports = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="p-6">
+        <Card className="p-6 border-0 border-transparent shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
           <div className="flex items-center justify-between mb-8">
             <h3 className="text-lg font-bold text-gray-900">Bookings Trend</h3>
             <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
               <CalendarCheck size={20} />
             </div>
           </div>
-          <div className="h-80 w-full">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-80 w-full min-h-[320px]">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <BarChart data={bookingData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
                 <XAxis 
@@ -106,8 +106,8 @@ export const Reports = () => {
               <TrendingUp size={20} />
             </div>
           </div>
-          <div className="h-80 w-full">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-80 w-full min-h-[320px]">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <LineChart data={revenueData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
                 <XAxis 
@@ -137,8 +137,8 @@ export const Reports = () => {
         <Card className="p-6">
           <h3 className="text-lg font-bold text-gray-900 mb-8">Popular Subjects</h3>
           <div className="flex flex-col md:flex-row items-center justify-around h-80">
-            <div className="w-full h-full max-w-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
+            <div className="w-full h-full max-w-[300px] min-h-[320px]">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                 <PieChart>
                   <Pie
                     data={subjectData}

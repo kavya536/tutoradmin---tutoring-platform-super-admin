@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Users, 
@@ -27,9 +28,14 @@ interface LayoutProps {
   setActivePage: (page: string) => void;
   onLogout: () => void;
   notifications: Notification[];
+  onMarkRead: (id: string) => void;
+  onContentRef?: (ref: React.RefObject<HTMLDivElement>) => void;
 }
 
-export const Layout = ({ children, activePage, setActivePage, onLogout, notifications }: LayoutProps) => {
+export const Layout = ({ children, activePage, setActivePage, onLogout, notifications, onMarkRead, onContentRef }: LayoutProps) => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const contentRef = React.useRef<HTMLDivElement>(null);
   const [showNotifications, setShowNotifications] = React.useState(false);
   const [showProfile, setShowProfile] = React.useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
@@ -45,6 +51,13 @@ export const Layout = ({ children, activePage, setActivePage, onLogout, notifica
   ];
 
   const unreadCount = notifications.filter(n => !n.read).length;
+
+  // Pass contentRef to parent component
+  React.useEffect(() => {
+    if (onContentRef) {
+      onContentRef(contentRef);
+    }
+  }, [contentRef, onContentRef]);
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden font-sans relative">
@@ -89,6 +102,7 @@ export const Layout = ({ children, activePage, setActivePage, onLogout, notifica
             <button
               key={item.id}
               onClick={() => {
+                navigate(`/${item.id}`);
                 setActivePage(item.id);
                 if (window.innerWidth < 1024) setIsSidebarOpen(false);
               }}
@@ -168,14 +182,21 @@ export const Layout = ({ children, activePage, setActivePage, onLogout, notifica
                       </div>
                       <div className="max-h-96 overflow-y-auto">
                         {notifications.map((n) => (
-                          <div key={n.id} className="p-4 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0 cursor-pointer">
+                          <div 
+                            key={n.id} 
+                            onClick={() => onMarkRead(n.id)}
+                            className={cn(
+                              "p-4 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0 cursor-pointer",
+                              n.read ? "opacity-50" : "bg-primary/5"
+                            )}
+                          >
                             <div className="flex items-start space-x-3">
                               <div className={cn(
                                 'w-2 h-2 mt-1.5 rounded-full flex-shrink-0',
-                                n.type === 'info' ? 'bg-blue-500' : n.type === 'warning' ? 'bg-yellow-500' : 'bg-green-500'
+                                n.read ? 'bg-gray-300' : 'bg-primary animate-pulse'
                               )} />
                               <div>
-                                <p className="text-sm font-bold text-gray-900">{n.title}</p>
+                                <p className={cn("text-sm text-gray-900", n.read ? "font-medium" : "font-black")}>{n.title}</p>
                                 <p className="text-xs text-gray-500 mt-0.5">{n.message}</p>
                                 <p className="text-[10px] text-gray-400 mt-1 font-medium">{n.time}</p>
                               </div>
@@ -216,14 +237,14 @@ export const Layout = ({ children, activePage, setActivePage, onLogout, notifica
                       className="absolute right-0 mt-2 w-48 sm:w-56 bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 overflow-hidden p-2"
                     >
                       <button 
-                        onClick={() => { setActivePage('settings'); setShowProfile(false); }}
+                        onClick={() => { navigate('/settings'); setActivePage('settings'); setShowProfile(false); }}
                         className="w-full flex items-center space-x-3 px-4 py-2.5 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-all"
                       >
                         <User size={18} />
                         <span>My Profile</span>
                       </button>
                       <button 
-                        onClick={() => { setActivePage('settings'); setShowProfile(false); }}
+                        onClick={() => { navigate('/settings'); setActivePage('settings'); setShowProfile(false); }}
                         className="w-full flex items-center space-x-3 px-4 py-2.5 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-all"
                       >
                         <Settings size={18} />
@@ -246,7 +267,7 @@ export const Layout = ({ children, activePage, setActivePage, onLogout, notifica
         </header>
 
         {/* Page Content */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+        <div ref={contentRef} className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
           {children}
         </div>
       </main>

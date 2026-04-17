@@ -1,11 +1,14 @@
 import * as React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Users, 
   UserRound, 
   CalendarCheck, 
   Star,
   ArrowUpRight,
-  Clock,
+  XCircle,
+  ChevronDown,
+  Calendar,
 } from 'lucide-react';
 import { Card, Badge, Button } from './UI';
 import { motion, AnimatePresence } from 'motion/react';
@@ -19,23 +22,6 @@ import {
 } from 'recharts';
 import { Tutor, Student, Booking, Payment } from '../types';
 
-const data = [
-  { name: 'Mon', bookings: 40 },
-  { name: 'Tue', bookings: 30 },
-  { name: 'Wed', bookings: 20 },
-  { name: 'Thu', bookings: 27 },
-  { name: 'Fri', bookings: 18 },
-  { name: 'Sat', bookings: 23 },
-  { name: 'Sun', bookings: 34 },
-];
-
-const topTutors = [
-  { name: 'Dr. Sarah Wilson', bookings: 124, color: '#005F63' },
-  { name: 'Elena Rodriguez', bookings: 98, color: '#008B8B' },
-  { name: 'James Miller', bookings: 76, color: '#20B2AA' },
-  { name: 'Robert Chen', bookings: 45, color: '#48D1CC' },
-];
-
 interface DashboardProps {
   tutors: Tutor[];
   students: Student[];
@@ -45,21 +31,93 @@ interface DashboardProps {
 }
 
 export const Dashboard = ({ tutors, students, bookings, setActivePage }: DashboardProps) => {
-  const [dateRange, setDateRange] = React.useState<'30days' | 'all'>('all');
+  const navigate = useNavigate();
+  const [dateRange, setDateRange] = React.useState<'today' | '7days' | '30days' | '1year' | 'all'>('today');
   const [selectedStudent, setSelectedStudent] = React.useState<Student | null>(null);
+  const [calOpen, setCalOpen] = React.useState(false);
+  const calRef = React.useRef<HTMLDivElement>(null);
+
+  // Close dropdowns on outside click
+  React.useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (calRef.current && !calRef.current.contains(e.target as Node)) setCalOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const periodLabel = dateRange === 'today' ? "Today's History" : dateRange === '7days' ? 'Last Week' : dateRange === '30days' ? 'Last Month' : dateRange === '1year' ? 'Last Year' : dateRange === 'all' ? 'All Time' : null;
 
   const filteredBookings = React.useMemo(() => {
     if (dateRange === 'all') return bookings;
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    return bookings.filter(b => new Date(b.dateTime) >= thirtyDaysAgo);
+    
+    const now = new Date();
+    
+    if (dateRange === 'today') {
+      const todayStart = new Date(now);
+      todayStart.setHours(0, 0, 0, 0);
+      const todayEnd = new Date(todayStart);
+      todayEnd.setDate(todayEnd.getDate() + 1);
+      
+      return bookings.filter(b => {
+        const d = new Date(b.dateTime);
+        return d >= todayStart && d < todayEnd;
+      });
+    }
+
+    const cutoff = new Date();
+    if (dateRange === '7days') cutoff.setDate(cutoff.getDate() - 7);
+    if (dateRange === '30days') cutoff.setMonth(cutoff.getMonth() - 1);
+    if (dateRange === '1year') cutoff.setFullYear(cutoff.getFullYear() - 1);
+    
+    return bookings.filter(b => new Date(b.dateTime) >= cutoff);
   }, [bookings, dateRange]);
 
+
+  // Bookings trend chart — groups filteredBookings by day of week
+  const bookingsByDay = React.useMemo(() => {
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const counts: Record<string, number> = { Sun: 0, Mon: 0, Tue: 0, Wed: 0, Thu: 0, Fri: 0, Sat: 0 };
+    filteredBookings.forEach(b => {
+      try {
+        const d = new Date(b.dateTime);
+        if (!isNaN(d.getTime())) counts[days[d.getDay()]]++;
+      } catch {}
+    });
+    return [
+      { name: 'Mon', bookings: counts.Mon },
+      { name: 'Tue', bookings: counts.Tue },
+      { name: 'Wed', bookings: counts.Wed },
+      { name: 'Thu', bookings: counts.Thu },
+      { name: 'Fri', bookings: counts.Fri },
+      { name: 'Sat', bookings: counts.Sat },
+      { name: 'Sun', bookings: counts.Sun },
+    ];
+  }, [filteredBookings]);
+
+  // Top performing tutors — based on filteredBookings
+  const topTutorsDynamic = React.useMemo(() => {
+    const tutorStats: Record<string, { bookings: number, color: string }> = {};
+    const colors = ['#005F63', '#008B8B', '#20B2AA', '#48D1CC'];
+    filteredBookings.forEach(b => {
+      if (b.tutorName) {
+        if (!tutorStats[b.tutorName]) {
+          tutorStats[b.tutorName] = { bookings: 0, color: colors[Object.keys(tutorStats).length % colors.length] };
+        }
+        tutorStats[b.tutorName].bookings++;
+      }
+    });
+    return Object.entries(tutorStats)
+      .map(([name, stats]) => ({ name, ...stats }))
+      .sort((a, b) => b.bookings - a.bookings)
+      .slice(0, 4);
+  }, [filteredBookings]);
+
   const stats = [
-    { label: 'Total Tutors', value: tutors.length, icon: Users, trend: '+12%', color: 'text-blue-600', bg: 'bg-blue-50', page: 'tutors' },
-    { label: 'Total Students', value: students.length, icon: UserRound, trend: '+5%', color: 'text-purple-600', bg: 'bg-purple-50', page: 'students' },
-    { label: 'Total Bookings', value: filteredBookings.length, icon: CalendarCheck, trend: '+18%', color: 'text-green-600', bg: 'bg-green-50', page: 'bookings' },
-    { label: 'Avg Rating', value: '4.8', icon: Star, trend: '+0.2', color: 'text-orange-600', bg: 'bg-orange-50', page: 'reviews' },
+    { label: 'Total Tutors', value: tutors.length, icon: Users, trend: 'Live', color: 'text-blue-600', bg: 'bg-blue-50', page: 'tutors' },
+    { label: 'Total Students', value: students.length, icon: UserRound, trend: 'Sync', color: 'text-purple-600', bg: 'bg-purple-50', page: 'students' },
+    { label: 'Total Bookings', value: filteredBookings.length, icon: CalendarCheck, trend: 'Realtime', color: 'text-green-600', bg: 'bg-green-50', page: 'bookings' },
+    { label: 'Avg Rating', value: tutors.length > 0 ? (tutors.reduce((acc, t) => acc + (t.rating || 0), 0) / tutors.length).toFixed(1) : '0.0', icon: Star, trend: 'Rating', color: 'text-orange-600', bg: 'bg-orange-50', page: 'reviews' },
   ];
 
   const itemVariants = {
@@ -86,23 +144,62 @@ export const Dashboard = ({ tutors, students, bookings, setActivePage }: Dashboa
           <h2 className="text-2xl font-black text-gray-900 tracking-tight">Dashboard Overview</h2>
           <p className="text-gray-500 font-medium mt-1">Welcome back, Admin. Here's what's happening today.</p>
         </div>
-        <div className="flex items-center space-x-2 overflow-x-auto no-scrollbar pb-1 sm:pb-0">
-          <Button 
-            variant={dateRange === '30days' ? 'primary' : 'outline'} 
-            className="font-bold text-sm whitespace-nowrap"
-            onClick={() => setDateRange('30days')}
+
+        {/* ── Button: Calendar / Period ── */}
+        <div className="relative" ref={calRef}>
+          <button
+            onClick={() => setCalOpen(p => !p)}
+            className={cn(
+              'flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-bold transition-all shadow-sm',
+              periodLabel
+                ? 'bg-primary text-white border-primary shadow-primary/20'
+                : 'bg-white text-gray-700 border-gray-200 hover:border-primary/40'
+            )}
           >
-            <Clock size={16} className="mr-2" />
-            Last 30 Days
-          </Button>
-          <Button 
-            variant={dateRange === 'all' ? 'primary' : 'outline'} 
-            className="font-bold text-sm whitespace-nowrap"
-            onClick={() => setDateRange('all')}
-          >
-            <CalendarCheck size={16} className="mr-2" />
-            All Time
-          </Button>
+            <Calendar size={15} />
+            <span>{periodLabel ?? 'Calendar'}</span>
+            <ChevronDown size={13} className={cn('transition-transform', calOpen && 'rotate-180')} />
+          </button>
+
+          <AnimatePresence>
+            {calOpen && (
+              <motion.div
+                initial={{ opacity: 0, y: 6, scale: 0.97 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 6, scale: 0.97 }}
+                transition={{ duration: 0.15 }}
+                className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden z-50"
+              >
+                <div className="p-1.5 flex flex-col gap-0.5">
+                  {([
+                    { key: 'today',  label: "Today's History", desc: 'Since midnight' },
+                    { key: '7days',  label: 'Last Week',       desc: 'Past 7 days' },
+                    { key: '30days', label: 'Last Month',      desc: 'Past 30 days' },
+                    { key: '1year',  label: 'Last Year',       desc: 'Past 365 days' },
+                    { key: 'all',    label: 'All Time',        desc: 'Entire history' },
+                  ] as const).map(({ key, label, desc }) => (
+                    <button
+                      key={key}
+                      onClick={() => { setDateRange(key); setCalOpen(false); }}
+                      className={cn(
+                        'flex items-start gap-3 w-full text-left px-3 py-2.5 rounded-xl transition-all',
+                        dateRange === key
+                          ? 'bg-primary/10 text-primary'
+                          : 'hover:bg-gray-50 text-gray-700'
+                      )}
+                    >
+                      <Calendar size={14} className="mt-0.5 shrink-0" />
+                      <div>
+                        <p className="text-sm font-bold leading-none">{label}</p>
+                        <p className="text-[10px] text-gray-400 mt-0.5">{desc}</p>
+                      </div>
+                      {dateRange === key && <span className="ml-auto text-primary text-xs">✓</span>}
+                    </button>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </motion.div>
 
@@ -122,7 +219,7 @@ export const Dashboard = ({ tutors, students, bookings, setActivePage }: Dashboa
           >
             <Card 
               className="p-6 lg:hover:shadow-2xl lg:hover:-translate-y-1 transition-all cursor-pointer group active:scale-95 border-b-4 border-transparent lg:hover:border-primary/20"
-              onClick={() => setActivePage(stat.page)}
+              onClick={() => { navigate(`/${stat.page}`); setActivePage(stat.page); }}
             >
               <div className="flex items-start justify-between">
                 <div className={cn('p-3 rounded-xl transition-colors group-hover:scale-110 duration-300', stat.bg)}>
@@ -150,7 +247,7 @@ export const Dashboard = ({ tutors, students, bookings, setActivePage }: Dashboa
         transition={{ delay: 0.2 }}
         className="grid grid-cols-1 lg:grid-cols-3 gap-6"
       >
-        <Card className="lg:col-span-2 p-6">
+        <Card className="lg:col-span-2 p-6 border-0 border-transparent shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
           <div className="flex items-center justify-between mb-8">
             <h3 className="text-lg font-bold text-gray-900">Bookings Trend</h3>
             <div className="flex items-center space-x-4">
@@ -160,9 +257,9 @@ export const Dashboard = ({ tutors, students, bookings, setActivePage }: Dashboa
               </div>
             </div>
           </div>
-          <div className="h-80 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={data}>
+          <div className="h-80 w-full min-h-[320px]">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+              <AreaChart data={bookingsByDay}>
                 <defs>
                   <linearGradient id="colorBook" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#005F63" stopOpacity={0.1}/>
@@ -196,7 +293,7 @@ export const Dashboard = ({ tutors, students, bookings, setActivePage }: Dashboa
         <Card className="p-6">
           <h3 className="text-lg font-bold text-gray-900 mb-8">Top Performing Tutors</h3>
           <div className="space-y-6">
-            {topTutors.map((tutor) => (
+            {topTutorsDynamic.map((tutor) => (
               <div key={tutor.name} className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
                   <span className="font-bold text-gray-700">{tutor.name}</span>
@@ -217,7 +314,7 @@ export const Dashboard = ({ tutors, students, bookings, setActivePage }: Dashboa
           <Button 
             variant="outline" 
             className="w-full mt-8 font-bold"
-            onClick={() => setActivePage('reports')}
+            onClick={() => { navigate('/reports'); setActivePage('reports'); }}
           >
             View Full Report
           </Button>
@@ -285,7 +382,14 @@ export const Dashboard = ({ tutors, students, bookings, setActivePage }: Dashboa
                 
                 <div className="flex flex-col items-center text-center space-y-4">
                   <div className="w-24 h-24 rounded-3xl overflow-hidden ring-4 ring-primary/10 shadow-lg">
-                    <img src={selectedStudent.avatar} alt={selectedStudent.name} className="w-full h-full object-cover" />
+                    <img 
+                      src={selectedStudent.avatar} 
+                      alt={selectedStudent.name} 
+                      className="w-full h-full object-cover" 
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedStudent.name)}&background=random&color=fff`;
+                      }}
+                    />
                   </div>
                   <div>
                     <h4 className="text-2xl font-black text-gray-900 tracking-tight">{selectedStudent.name}</h4>
