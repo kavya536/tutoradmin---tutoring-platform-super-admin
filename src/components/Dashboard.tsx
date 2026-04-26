@@ -11,7 +11,7 @@ import {
   Calendar,
 } from 'lucide-react';
 import { Card, Badge, Button } from './UI';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, Variants } from 'motion/react';
 import { 
   AreaChart, 
   Area, 
@@ -120,7 +120,7 @@ export const Dashboard = ({ tutors, students, bookings, setActivePage }: Dashboa
     { label: 'Avg Rating', value: tutors.length > 0 ? (tutors.reduce((acc, t) => acc + (t.rating || 0), 0) / tutors.length).toFixed(1) : '0.0', icon: Star, trend: 'Rating', color: 'text-orange-600', bg: 'bg-orange-50', page: 'reviews' },
   ];
 
-  const itemVariants = {
+  const itemVariants: Variants = {
     hidden: { opacity: 0, y: 10 },
     visible: { 
       opacity: 1, 

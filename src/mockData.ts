@@ -99,6 +99,7 @@ export const MOCK_BOOKINGS: Booking[] = [
   {
     id: 'b1',
     studentId: 's1',
+    tutorId: '1',
     studentName: 'Alice Thompson',
     tutorName: 'Dr. Sarah Wilson',
     subject: 'Mathematics',
@@ -108,6 +109,7 @@ export const MOCK_BOOKINGS: Booking[] = [
   {
     id: 'b2',
     studentId: 's2',
+    tutorId: '2',
     studentName: 'Bob Smith',
     tutorName: 'James Miller',
     subject: 'History',
@@ -117,6 +119,7 @@ export const MOCK_BOOKINGS: Booking[] = [
   {
     id: 'b3',
     studentId: 's1',
+    tutorId: '3',
     studentName: 'Alice Thompson',
     tutorName: 'Elena Rodriguez',
     subject: 'Spanish',
@@ -127,6 +130,7 @@ export const MOCK_BOOKINGS: Booking[] = [
   {
     id: 'b4',
     studentId: 's2',
+    tutorId: '1',
     studentName: 'Bob Smith',
     tutorName: 'Dr. Sarah Wilson',
     subject: 'Physics',
@@ -136,6 +140,7 @@ export const MOCK_BOOKINGS: Booking[] = [
   {
     id: 'b5',
     studentId: 's3',
+    tutorId: '4',
     studentName: 'Charlie Davis',
     tutorName: 'Robert Chen',
     subject: 'Computer Science',

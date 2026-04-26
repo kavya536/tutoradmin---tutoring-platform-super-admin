@@ -29,6 +29,7 @@ interface LayoutProps {
   onLogout: () => void;
   notifications: Notification[];
   onMarkRead: (id: string) => void;
+  onNotificationClick: (n: Notification) => void;
   onContentRef?: (ref: React.RefObject<HTMLDivElement>) => void;
   adminName?: string;
   adminAvatar?: string;
@@ -41,6 +42,7 @@ export const Layout = ({
   onLogout, 
   notifications, 
   onMarkRead, 
+  onNotificationClick,
   onContentRef,
   adminName = 'Super Admin',
   adminAvatar
@@ -193,10 +195,13 @@ export const Layout = ({
                         <button className="text-xs text-primary font-bold hover:underline">Mark all read</button>
                       </div>
                       <div className="max-h-96 overflow-y-auto">
-                        {notifications.map((n) => (
+                          {notifications.map((n) => (
                           <div 
                             key={n.id} 
-                            onClick={() => onMarkRead(n.id)}
+                            onClick={() => {
+                              onNotificationClick(n);
+                              setShowNotifications(false);
+                            }}
                             className={cn(
                               "p-4 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0 cursor-pointer",
                               n.read ? "opacity-50" : "bg-primary/5"

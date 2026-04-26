@@ -14,9 +14,10 @@ export interface Tutor {
   phone?: string;
   // Registration stores qualification (not subjects array)
   qualification?: string;
+  targetClasses?: string;
   subjects?: string[];
   experience: string;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'approved' | 'rejected' | 'blocked';
   bio?: string;
   avatar?: string;
   joinedDate?: string;
@@ -53,6 +54,9 @@ export interface Tutor {
   rejectionReason?: string;
   rejectedAt?: any;
   approvedAt?: any;
+  profilePic?: string; // Legacy/Auth sync
+  profileImage?: string; // Legacy/Auth sync
+  photoURL?: string; // Legacy/Auth sync
 }
 
 export interface Student {
@@ -75,8 +79,17 @@ export interface Booking {
   dateTime: string;
   date?: string;
   time?: string;
-  status: 'pending' | 'confirmed' | 'cancelled';
+  status: 'pending' | 'confirmed' | 'cancelled' | 'completed' | 'pending_cancellation';
   cancellationReason?: string;
+  amount?: number;
+  tutorId: string;
+  paidAt?: any;
+  studentType?: string;
+  studentEmail?: string;
+  reviewSubmitted?: boolean;
+  reviewRating?: number;
+  reviewComment?: string;
+  reviewedAt?: any;
 }
 
 export interface Payment {
@@ -104,6 +117,11 @@ export interface Notification {
   time: string;
   type: 'info' | 'warning' | 'success';
   read: boolean;
+  targetId?: string;
+  tutorId?: string;
+  studentId?: string;
+  bookingId?: string;
+  category?: string;
 }
 
 export interface AdminSettingsData {

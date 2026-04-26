@@ -158,9 +158,37 @@ export const Settings = ({ settings, currentAdminName, onSaveSettings, onUpdateP
               </div>
 
                <div className="mt-10 pt-8 border-t border-gray-100 flex justify-end">
-                <Button className="font-black px-8 py-4 rounded-2xl shadow-xl shadow-primary/20 uppercase text-xs tracking-widest" disabled={isSaving} onClick={() => handleSave('Profile changes saved successfully!', (prev) => ({ ...prev, profile: profileData }))}>
-                  <Save size={18} className="mr-2" />
-                  Update Profile
+                <Button 
+                  className={cn(
+                    "font-black px-8 py-4 rounded-2xl shadow-xl uppercase text-xs tracking-widest transition-all",
+                    toast === 'inline-profile-success' ? "bg-green-500 hover:bg-green-600 shadow-green-500/20" : "shadow-primary/20"
+                  )} 
+                  disabled={isSaving} 
+                  onClick={async () => {
+                    try {
+                      setIsSaving(true);
+                      await onSaveSettings({ ...settings, profile: profileData });
+                      setToast('inline-profile-success');
+                      setTimeout(() => setToast(null), 2000);
+                    } catch (e: any) {
+                      setToast(e?.message || 'Failed to save settings');
+                      setTimeout(() => setToast(null), 2500);
+                    } finally {
+                      setIsSaving(false);
+                    }
+                  }}
+                >
+                  {toast === 'inline-profile-success' ? (
+                    <>
+                      <CheckCircle2 size={18} className="mr-2" />
+                      Updated Successfully
+                    </>
+                  ) : (
+                    <>
+                      <Save size={18} className="mr-2" />
+                      {isSaving ? 'Updating...' : 'Update Profile'}
+                    </>
+                  )}
                 </Button>
               </div>
             </Card>
@@ -405,25 +433,10 @@ export const Settings = ({ settings, currentAdminName, onSaveSettings, onUpdateP
           )}
         </div>
       </div>
-
-      {/* Toast Notification */}
-      <AnimatePresence>
-        {toast && (
-          <motion.div 
-            initial={{ opacity: 0, y: 50, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 20, scale: 0.9 }}
-            className="fixed bottom-8 right-8 z-50 flex items-center space-x-3 bg-gray-900 text-white px-6 py-3 rounded-2xl shadow-2xl"
-          >
-            <CheckCircle2 size={18} className="text-green-500" />
-            <p className="text-sm font-bold tracking-tight">{toast}</p>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 };
 
 function cn(...inputs: any[]) {
   return inputs.filter(Boolean).join(' ');
-}
+} 

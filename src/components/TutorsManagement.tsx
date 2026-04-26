@@ -24,7 +24,8 @@ import {
   AlertTriangle,
   ChevronDown,
   AlertCircle,
-  Eye
+  Eye,
+  UserX
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
@@ -40,6 +41,8 @@ interface TutorsManagementProps {
   onApprove: (id: string) => void;
   onReject: (id: string, reason?: string) => void;
   onResendEmail: (id: string) => void;
+  onToggleBlock: (id: string, currentStatus: string) => void;
+  initialSelectedTutorId?: string | null;
 }
 
 export const TutorsManagement = ({ 
@@ -48,10 +51,12 @@ export const TutorsManagement = ({
   bookings, 
   onApprove, 
   onReject,
-  onResendEmail 
+  onResendEmail,
+  onToggleBlock,
+  initialSelectedTutorId = null
 }: TutorsManagementProps) => {
   const [activeTab, setActiveTab] = React.useState('All');
-  const [selectedTutorId, setSelectedTutorId] = React.useState<string | null>(null);
+  const [selectedTutorId, setSelectedTutorId] = React.useState<string | null>(initialSelectedTutorId);
   const [verifyingTutorId, setVerifyingTutorId] = React.useState<string | null>(null);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [rejectionModal, setRejectionModal] = React.useState<{ isOpen: boolean, tutorId: string }>({ isOpen: false, tutorId: '' });
@@ -59,6 +64,12 @@ export const TutorsManagement = ({
   const [openMenuId, setOpenMenuId] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
   const [fullViewDoc, setFullViewDoc] = React.useState<{ url: string, title: string } | null>(null);
+
+  React.useEffect(() => {
+    if (initialSelectedTutorId) {
+      setSelectedTutorId(initialSelectedTutorId);
+    }
+  }, [initialSelectedTutorId]);
 
   const filteredTutors = (tutors || []).filter(t => {
     const matchesTab = activeTab === 'All' || t.status === activeTab.toLowerCase().replace(' approval', '');
@@ -104,7 +115,7 @@ export const TutorsManagement = ({
     visible: { 
       opacity: 1, 
       y: 0, 
-      transition: { duration: 0.3, ease: 'easeOut' }
+      transition: { duration: 0.3, ease: 'easeOut' as const }
     },
   };
 
@@ -114,7 +125,7 @@ export const TutorsManagement = ({
       opacity: 1, 
       scale: 1, 
       y: 0, 
-      transition: { type: 'spring', stiffness: 300, damping: 20 }
+      transition: { type: 'spring' as const, stiffness: 300, damping: 20 }
     },
     exit: { opacity: 0, scale: 0.95, y: -10, transition: { duration: 0.1 } }
   };
@@ -304,6 +315,26 @@ export const TutorsManagement = ({
                                   <XCircle size={16} />
                                   Reject Tutor
                                 </button>
+                                <div className="h-px bg-gray-50 my-1.5" />
+                                <button 
+                                  onClick={() => { onToggleBlock(tutor.id, tutor.status || 'pending'); setOpenMenuId(null); }}
+                                  className={cn(
+                                    "w-full px-4 py-2.5 text-left text-sm font-black flex items-center gap-3 transition-colors",
+                                    (tutor.status || 'pending') === 'blocked' ? "text-green-600 hover:bg-green-50" : "text-red-600 hover:bg-red-50"
+                                  )}
+                                >
+                                  {(tutor.status || 'pending') === 'blocked' ? (
+                                    <>
+                                      <ShieldCheck size={16} />
+                                      Unblock Tutor
+                                    </>
+                                  ) : (
+                                    <>
+                                      <UserX size={16} />
+                                      Block Tutor
+                                    </>
+                                  )}
+                                </button>
                                 {tutor.status !== 'pending' && (
                                   <>
                                     <div className="h-px bg-gray-50 my-1.5" />
@@ -406,6 +437,25 @@ export const TutorsManagement = ({
                 >
                   Verify Documents
                 </Button>
+                <div className="h-px bg-gray-100 my-1" />
+                <Button 
+                  variant={selectedTutor.status === 'blocked' ? 'success' : 'danger'}
+                  className="rounded-xl flex items-center justify-center gap-2" 
+                  onClick={() => onToggleBlock(selectedTutor.id, selectedTutor.status || 'pending')}
+                  disabled={isLoading}
+                >
+                  {selectedTutor.status === 'blocked' ? (
+                    <>
+                      <ShieldCheck size={16} />
+                      Unblock Tutor
+                    </>
+                  ) : (
+                    <>
+                      <UserX size={16} />
+                      Block Tutor
+                    </>
+                  )}
+                </Button>
               </div>
             </div>
 
@@ -425,6 +475,12 @@ export const TutorsManagement = ({
                       <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Highest Degree</span>
                       <span className="text-sm font-black text-gray-900">{selectedTutor.qualification || 'N/A'}</span>
                     </div>
+                    {selectedTutor.targetClasses && (
+                      <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex items-center justify-between">
+                        <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Target Classes</span>
+                        <span className="text-sm font-black text-slate-900 leading-tight text-right max-w-[150px]">{selectedTutor.targetClasses}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
                 
@@ -488,31 +544,6 @@ export const TutorsManagement = ({
                       type="pdf"
                       onViewFull={setFullViewDoc}
                     />
-                    <div className="pt-4 border-t border-gray-100">
-                       <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Other Detected Links:</h5>
-                       <div className="flex flex-wrap gap-2">
-                          {Object.entries(selectedTutor).map(([key, value]) => {
-                             if (typeof value === 'string' && (value.startsWith('http') || value.includes('firebasestorage')) && !['avatar', 'profileImage', 'demoVideo', 'videoURL'].includes(key)) {
-                                return (
-                                   <a key={key} href={value} target="_blank" className="px-3 py-1 bg-white hover:bg-primary/5 rounded-lg text-[10px] font-bold border border-gray-200 transition-colors">
-                                      {key}
-                                   </a>
-                                );
-                             }
-                             return null;
-                          })}
-                          {Object.entries(selectedTutor.documents || {}).map(([key, value]) => {
-                             if (typeof value === 'string' && (value.startsWith('http') || value.includes('firebasestorage'))) {
-                                return (
-                                   <a key={`st-doc-${key}`} href={value} target="_blank" className="px-3 py-1 bg-white hover:bg-primary/5 rounded-lg text-[10px] font-bold border border-gray-200 transition-colors">
-                                      doc.{key}
-                                   </a>
-                                );
-                             }
-                             return null;
-                          })}
-                       </div>
-                    </div>
                   </div>
                 </div>
 
@@ -692,52 +723,6 @@ export const TutorsManagement = ({
                   <p className="text-xs text-slate-400 font-bold mt-1">Check the list below for any other detected links.</p>
                 </div>
               )}
-            </div>
-
-            {/* Exhaustive Document Search (Safety Net) */}
-            <div className="space-y-4 pt-4 border-t border-gray-100">
-               <div className="flex items-center justify-between">
-                 <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Other Detected Database Links:</h5>
-                 <button 
-                   onClick={() => console.log("🔍 FULL TUTOR DATA:", verifyingTutor)}
-                   className="text-[9px] font-black text-primary hover:underline uppercase tracking-widest"
-                   title="Check browser console for raw data object"
-                 >
-                   Log Raw Data to Console
-                 </button>
-               </div>
-               <div className="flex flex-wrap gap-2">
-                  {Object.entries(verifyingTutor).map(([key, value]) => {
-                     if (typeof value === 'string' && (value.startsWith('http') || value.includes('firebasestorage')) && !['avatar', 'profileImage', 'demoVideo', 'videoURL'].includes(key)) {
-                        return (
-                           <a key={key} href={value} target="_blank" className="px-3 py-1.5 bg-gray-100 hover:bg-primary/10 hover:text-primary rounded-lg text-[10px] font-bold transition-all border border-gray-200">
-                              {key}: View
-                           </a>
-                        );
-                     }
-                     return null;
-                  })}
-                  {Object.entries(verifyingTutor.documents || {}).map(([key, value]) => {
-                     if (typeof value === 'string' && (value.startsWith('http') || value.includes('firebasestorage'))) {
-                        return (
-                           <a key={`doc-${key}`} href={value} target="_blank" className="px-3 py-1.5 bg-gray-100 hover:bg-primary/10 hover:text-primary rounded-lg text-[10px] font-bold transition-all border border-gray-200">
-                              documents.{key}: View
-                           </a>
-                        );
-                     }
-                     return null;
-                  })}
-                  
-                  {/* DATA INSPECTOR TRIGGER */}
-                  <details className="w-full mt-4 group">
-                    <summary className="text-[10px] font-black text-gray-400 uppercase tracking-widest cursor-pointer hover:text-primary transition-colors flex items-center gap-2">
-                      <ShieldCheck size={12} /> Click to Inspect All Database Fields
-                    </summary>
-                    <div className="mt-4 p-4 bg-gray-900 rounded-3xl overflow-auto max-h-60 text-[10px] font-mono text-green-400 shadow-inner">
-                      <pre>{JSON.stringify(verifyingTutor, null, 2)}</pre>
-                    </div>
-                  </details>
-               </div>
             </div>
             {/* Actions Footer */}
             <div className="sticky bottom-0 bg-white pt-6 pb-2 border-t border-gray-50 flex items-center justify-end gap-3 z-50">
@@ -976,7 +961,7 @@ const VerificationCard = ({ title, subtitle, icon, url: initialUrl, type, onView
                            <div className="flex items-center gap-2">
                   <Button 
                     size="sm"
-                    variant="info"
+                    variant="ghost"
                     className="h-7 text-[10px] px-3 font-bold bg-primary/10 text-primary border-primary/20 hover:bg-primary/20"
                     onClick={() => onViewFull({ url: url, title: title })}
                   >
@@ -984,56 +969,6 @@ const VerificationCard = ({ title, subtitle, icon, url: initialUrl, type, onView
                     View Document
                   </Button>
 
-                  <Button 
-                    size="sm"
-                    variant="outline"
-                    className="h-7 text-[10px] px-3 font-bold"
-                    onClick={async (e) => {
-                       const btn = e.currentTarget;
-                       const originalText = btn.innerHTML;
-                       try {
-                         btn.disabled = true;
-                         btn.innerHTML = '<span class="animate-pulse">Fetching...</span>';
-                         
-                         if (initialUrl && !initialUrl.startsWith('http')) {
-                            // CASE 1: NATIVE FIREBASE STORAGE
-                            const storageRef = ref(storage, initialUrl);
-                            const blob = await getBlob(storageRef);
-                            const blobUrl = window.URL.createObjectURL(blob);
-                            const a = document.createElement('a');
-                            a.href = blobUrl;
-                            a.download = `${title.replace(/\s+/g, '_')}_Verified.pdf`;
-                            document.body.appendChild(a);
-                            a.click();
-                            window.URL.revokeObjectURL(blobUrl);
-                            document.body.removeChild(a);
-                         } else {
-                            // CASE 2: CLOUDINARY OR OTHER PUBLIC URL
-                            let finalUrl = url;
-                            if (url && url.includes('cloudinary')) {
-                               // Inject flags to force a raw PDF download
-                               if (url.includes('/image/upload/')) {
-                                  finalUrl = url.replace('/image/upload/', '/raw/upload/fl_attachment/');
-                               } else {
-                                  finalUrl = url.replace('/upload/', '/upload/fl_attachment/');
-                               }
-                               // Ensure file extension is pdf
-                               finalUrl = finalUrl.replace(/\.[^/.]+$/, ".pdf");
-                            }
-                            window.location.assign(finalUrl || '');
-                         }
-                       } catch (err) {
-                         console.error("Direct download failed, falling back to tab:", err);
-                         window.open(url || '', '_blank');
-                       } finally {
-                         btn.disabled = false;
-                         btn.innerHTML = originalText;
-                       }
-                    }}
-                  >
-                    <Download size={12} className="mr-1" />
-                    Download PDF
-                  </Button>
                 </div>
              </div>
 

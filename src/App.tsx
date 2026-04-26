@@ -62,7 +62,15 @@ export default function App() {
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
+    const authTimeout = setTimeout(() => {
+      if (loading) {
+        console.warn("Admin Auth timeout - forcing loading to false");
+        setLoading(false);
+      }
+    }, 10000);
+
     const unsubscribe = onAuthStateChanged(auth, (user) => {
+      clearTimeout(authTimeout);
       if (user && sessionStorage.getItem('just_registered') === 'true') {
         sessionStorage.removeItem('just_registered');
         signOut(auth);
@@ -71,10 +79,15 @@ export default function App() {
       setIsAuthenticated(!!user);
       setLoading(false);
     });
-    return () => unsubscribe();
-  }, []);
+    return () => {
+      unsubscribe();
+      clearTimeout(authTimeout);
+    };
+  }, [loading]);
 
   const [activePage, setActivePage] = React.useState('dashboard');
+  const [selectedTutorId, setSelectedTutorId] = React.useState<string | null>(null);
+  const [selectedStudentId, setSelectedStudentId] = React.useState<string | null>(null);
   const [contentRef, setContentRef] = React.useState<React.RefObject<HTMLDivElement> | null>(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = React.useState(false);
 
@@ -164,9 +177,13 @@ export default function App() {
     });
 
     setTutors(Array.from(merged.values()));
-    // Set loading false if we have data or if listeners are established
-    if (usersData.length > 0 || legacyData.length > 0 || rejectedData.length > 0) setLoading(false);
-  }, [usersData, legacyData, rejectedData]);
+    console.log(`📊 [ADMIN SYNC] Merged ${merged.size} tutors. (${usersData.length} from users collection)`);
+    
+    // Ensure loading is turned off once we have data or the listeners have initialized
+    if (isAuthenticated) {
+      setLoading(false);
+    }
+  }, [usersData, legacyData, rejectedData, isAuthenticated]);
 
   React.useEffect(() => {
     if (!isAuthenticated) return;
@@ -175,8 +192,13 @@ export default function App() {
     // 1. Unified Synchronization for all Tutors across Legacy & Unified collections
 
     // 1. Independent Listeners for all collections
-    const unsubUsers = onSnapshot(query(collection(db, 'users'), where('role', '==', 'tutor')), (snap) => {
-      setUsersData(snap.docs.map(d => ({ id: d.id, ...d.data() } as any)));
+    // BROADENED QUERY: Listen to all 'tutor' roles, or anyone with a status field (fallback for incomplete registration)
+    const unsubUsers = onSnapshot(query(collection(db, 'users'), where('role', 'in', ['tutor', 'Tutor'])), (snap) => {
+      const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+      console.log(`👥 [FIRESTORE] Users sync: ${data.length} records found.`);
+      setUsersData(data);
+    }, (err) => {
+      console.error("❌ [FIRESTORE ERROR] Users Query:", err);
     });
 
     const unsubTutors = onSnapshot(collection(db, 'tutors'), (snap) => {
@@ -199,11 +221,33 @@ export default function App() {
 
     // 4. Sync Notifications
     const unsubNotifs = onSnapshot(query(collection(db, 'admin_notifications'), orderBy('time', 'desc')), (snap) => {
-      setNotifications(snap.docs.map(d => ({ 
-        id: d.id, 
-        ...d.data(), 
-        time: d.data().time?.toDate()?.toLocaleString() || 'Just now' 
-      } as any)));
+      setNotifications(snap.docs.map(d => {
+        const data = d.data();
+        let timeStr = 'Just now';
+        
+        if (data.time) {
+          try {
+            const date = data.time.toDate ? data.time.toDate() : new Date(data.time);
+            if (!isNaN(date.getTime())) {
+              timeStr = date.toLocaleString([], { 
+                month: 'short', 
+                day: 'numeric', 
+                hour: '2-digit', 
+                minute: '2-digit' 
+              });
+            }
+          } catch (e) {
+            console.warn("Could not format notif time:", data.time);
+            timeStr = String(data.time).split('T').join(' ').split('.')[0];
+          }
+        }
+        
+        return { 
+          id: d.id, 
+          ...data,
+          time: timeStr
+        } as any;
+      }));
     });
 
     // 5. Sync admin settings
@@ -340,9 +384,26 @@ export default function App() {
     }
   };
 
-  // Keep local simulation for unused components temporarily
-  const handleToggleBlockStudent = (id: string) => {
-    setStudents(prev => prev.map(s => s.id === id ? { ...s, status: s.status === 'active' ? 'blocked' : 'active' } : s));
+  const handleToggleBlockStudent = async (id: string, currentStatus: string) => {
+    try {
+      const newStatus = currentStatus === 'blocked' ? 'active' : 'blocked';
+      await updateDoc(doc(db, 'students', id), { status: newStatus });
+      uiToast(newStatus === 'blocked' ? 'Student Blocked' : 'Student Unblocked', `Account has been ${newStatus}.`, 'warning');
+    } catch(err: any) {
+      console.error(err);
+      uiToast('Action Failed', err.message, 'warning');
+    }
+  };
+
+  const handleToggleBlockTutor = async (id: string, currentStatus: string) => {
+    try {
+      const newStatus = currentStatus === 'blocked' ? 'approved' : 'blocked'; 
+      await updateDoc(doc(db, 'users', id), { status: newStatus });
+      uiToast(newStatus === 'blocked' ? 'Tutor Blocked' : 'Tutor Unblocked', `Account has been ${newStatus}.`, 'warning');
+    } catch(err: any) {
+      console.error(err);
+      uiToast('Action Failed', err.message, 'warning');
+    }
   };
   const handleMarkAsPaid = (id: string) => {
     setPayments(prev => prev.map(p => p.id === id ? { ...p, status: 'paid' } : p));
@@ -426,6 +487,26 @@ export default function App() {
     }
   };
 
+  const handleNotificationClick = async (n: any) => {
+    // 1. Navigation Logic
+    if (n.tutorId) {
+      setSelectedTutorId(n.tutorId);
+      setActivePage('tutors');
+    } else if (n.studentId) {
+      setSelectedStudentId(n.studentId);
+      setActivePage('students');
+    } else if (n.type === 'Registration' || n.type === 'Tutor') {
+      setActivePage('tutors');
+    } else if (n.type === 'Booking') {
+      setActivePage('bookings');
+    }
+
+    // 2. Mark as read only when user clicks and navigates
+    if (!n.read) {
+      await handleMarkRead(n.id);
+    }
+  };
+
   const filteredNotifications = React.useMemo(() => {
     return notifications.filter((n) => {
       const title = (n.title || '').toLowerCase();
@@ -466,9 +547,16 @@ export default function App() {
                 await sendTutorNotification(tutor, tutor.status as any, tutor.rejectionReason);
               }
             }} 
+            onToggleBlock={handleToggleBlockTutor}
+            initialSelectedTutorId={selectedTutorId}
           />;
         case 'students':
-          return <StudentsManagement students={students} bookings={bookings} onToggleBlock={handleToggleBlockStudent} />;
+          return <StudentsManagement 
+            students={students} 
+            bookings={bookings} 
+            onToggleBlock={handleToggleBlockStudent} 
+            initialSelectedStudentId={selectedStudentId}
+          />;
         case 'bookings':
           return <BookingsManagement bookings={bookings} />;
         case 'payments':
@@ -511,10 +599,16 @@ export default function App() {
       <ScrollToTop activePage={activePage} contentRef={contentRef} />
       <Layout 
         activePage={activePage} 
-        setActivePage={setActivePage} 
+        setActivePage={(page) => {
+          setActivePage(page);
+          // Clear selections when manually switching pages
+          setSelectedTutorId(null);
+          setSelectedStudentId(null);
+        }} 
         onLogout={handleLogout}
         notifications={filteredNotifications}
         onMarkRead={handleMarkRead}
+        onNotificationClick={handleNotificationClick}
         onContentRef={setContentRef}
         adminName={adminSettings.profile.fullName}
       >
@@ -554,12 +648,6 @@ export default function App() {
               </button>
             </div>
           </motion.div>
-        </div>
-      )}
-
-      {appToast && (
-        <div className="fixed bottom-8 right-8 z-[320] flex items-center space-x-3 bg-gray-900 text-white px-5 py-3 rounded-2xl shadow-2xl">
-          <p className="text-sm font-bold">{appToast.title}: {appToast.message}</p>
         </div>
       )}
     </Router>

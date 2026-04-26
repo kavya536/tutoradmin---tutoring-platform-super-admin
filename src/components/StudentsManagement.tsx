@@ -7,7 +7,9 @@ import {
   Mail,
   GraduationCap,
   Calendar,
-  X
+  X,
+  UserX,
+  ShieldCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Card, Badge, Button, Table, Modal } from './UI';
@@ -16,11 +18,21 @@ import { Student, Booking } from '../types';
 interface StudentsManagementProps {
   students: Student[];
   bookings: Booking[];
-  onToggleBlock: (id: string) => void;
+  onToggleBlock: (id: string, currentStatus: string) => void;
+  initialSelectedStudentId?: string | null;
 }
 
-export const StudentsManagement = ({ students, bookings, onToggleBlock }: StudentsManagementProps) => {
-  const [selectedStudent, setSelectedStudent] = React.useState<Student | null>(null);
+export const StudentsManagement = ({ students, bookings, onToggleBlock, initialSelectedStudentId = null }: StudentsManagementProps) => {
+  const [selectedStudent, setSelectedStudent] = React.useState<Student | null>(
+    initialSelectedStudentId ? students.find(s => s.id === initialSelectedStudentId) || null : null
+  );
+
+  React.useEffect(() => {
+    if (initialSelectedStudentId) {
+      const student = students.find(s => s.id === initialSelectedStudentId);
+      if (student) setSelectedStudent(student);
+    }
+  }, [initialSelectedStudentId, students]);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [symbolName, setSymbolName] = React.useState<string | null>(null);
   const [openMenuId, setOpenMenuId] = React.useState<string | null>(null);
@@ -84,7 +96,7 @@ export const StudentsManagement = ({ students, bookings, onToggleBlock }: Studen
       y: 0, 
       filter: 'blur(0px)',
       transition: {
-        type: 'spring',
+        type: 'spring' as const,
         stiffness: 120,
         damping: 20
       }
@@ -99,7 +111,7 @@ export const StudentsManagement = ({ students, bookings, onToggleBlock }: Studen
       y: 0, 
       filter: 'blur(0px)',
       transition: {
-        type: 'spring',
+        type: 'spring' as const,
         stiffness: 150,
         damping: 15
       }
@@ -234,6 +246,25 @@ export const StudentsManagement = ({ students, bookings, onToggleBlock }: Studen
                               <Eye size={16} className="text-gray-400" />
                               <span>View Profile</span>
                             </button>
+                            <div className="h-px bg-gray-50 my-1.5" />
+                            <button 
+                              onClick={() => { onToggleBlock(student.id, student.status || 'active'); setOpenMenuId(null); }}
+                              className={`w-full px-4 py-2.5 text-left text-sm font-bold flex items-center gap-3 transition-colors ${
+                                (student.status || 'active') === 'blocked' ? 'text-green-600 hover:bg-green-50' : 'text-red-600 hover:bg-red-50'
+                              }`}
+                            >
+                              {(student.status || 'active') === 'blocked' ? (
+                                <>
+                                  <ShieldCheck size={16} />
+                                  <span>Unblock Student</span>
+                                </>
+                              ) : (
+                                <>
+                                  <UserX size={16} />
+                                  <span>Block Student</span>
+                                </>
+                              )}
+                            </button>
                           </motion.div>
                         </>
                       )}
@@ -248,22 +279,6 @@ export const StudentsManagement = ({ students, bookings, onToggleBlock }: Studen
         </Table>
       </Card>
 
-      {/* Symbol Name Toast/Modal */}
-      <AnimatePresence>
-        {symbolName && (
-          <motion.div 
-            initial={{ opacity: 0, y: 50 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 50 }}
-            className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white px-6 py-3 rounded-full shadow-2xl z-[100] font-bold text-sm flex items-center space-x-3"
-          >
-            <span>Action: {symbolName}</span>
-            <button onClick={() => setSymbolName(null)} className="p-1 hover:bg-white/10 rounded-full transition-colors">
-              <X size={16} />
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       <Modal 
         isOpen={!!selectedStudent} 
@@ -292,6 +307,31 @@ export const StudentsManagement = ({ students, bookings, onToggleBlock }: Studen
                     <GraduationCap size={14} className="mr-2" />
                     {selectedStudent.class}
                   </div>
+                </div>
+              </div>
+              <div className="flex flex-col gap-2">
+                <Button 
+                  variant={selectedStudent.status === 'blocked' ? 'success' : 'danger'}
+                  className="rounded-xl flex items-center gap-2 px-6"
+                  onClick={() => onToggleBlock(selectedStudent.id, selectedStudent.status || 'active')}
+                >
+                  {selectedStudent.status === 'blocked' ? (
+                    <>
+                      <ShieldCheck size={16} />
+                      Unblock Student
+                    </>
+                  ) : (
+                    <>
+                      <UserX size={16} />
+                      Block Student
+                    </>
+                  )}
+                </Button>
+                <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 flex items-center justify-between">
+                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Status</span>
+                  <Badge variant={selectedStudent.status === 'active' ? 'success' : 'danger'}>
+                    {selectedStudent.status}
+                  </Badge>
                 </div>
               </div>
             </div>
@@ -336,7 +376,7 @@ export const StudentsManagement = ({ students, bookings, onToggleBlock }: Studen
                             <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
                               {formatBookingDate(activity)}
                             </span>
-                            <Badge variant={activity.status === 'confirmed' || activity.status === 'completed' ? 'success' : activity.status === 'cancelled' ? 'danger' : 'pending'}>
+                            <Badge variant={activity.status === 'confirmed' || activity.status === 'completed' ? 'success' : activity.status === 'cancelled' ? 'danger' : 'warning'}>
                               {activity.status || 'pending'}
                             </Badge>
                           </div>
