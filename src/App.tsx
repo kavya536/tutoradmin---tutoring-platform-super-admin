@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { Routes, Route, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { LogOut } from 'lucide-react';
 import { auth } from './firebase';
@@ -221,33 +221,40 @@ export default function App() {
 
     // 4. Sync Notifications
     const unsubNotifs = onSnapshot(query(collection(db, 'admin_notifications'), orderBy('time', 'desc')), (snap) => {
-      setNotifications(snap.docs.map(d => {
-        const data = d.data();
-        let timeStr = 'Just now';
-        
-        if (data.time) {
-          try {
-            const date = data.time.toDate ? data.time.toDate() : new Date(data.time);
-            if (!isNaN(date.getTime())) {
-              timeStr = date.toLocaleString([], { 
-                month: 'short', 
-                day: 'numeric', 
-                hour: '2-digit', 
-                minute: '2-digit' 
-              });
+        const newNotifs = snap.docs.map(d => {
+          const data = d.data();
+          let timeStr = 'Just now';
+          
+          if (data.time) {
+            try {
+              const date = data.time.toDate ? data.time.toDate() : new Date(data.time);
+              if (!isNaN(date.getTime())) {
+                timeStr = date.toLocaleString([], { 
+                  month: 'short', 
+                  day: 'numeric', 
+                  hour: '2-digit', 
+                  minute: '2-digit' 
+                });
+              }
+            } catch (e) {
+              timeStr = 'Just now';
             }
-          } catch (e) {
-            console.warn("Could not format notif time:", data.time);
-            timeStr = String(data.time).split('T').join(' ').split('.')[0];
           }
-        }
-        
-        return { 
-          id: d.id, 
-          ...data,
-          time: timeStr
-        } as any;
-      }));
+          
+          return { id: d.id, ...data, time: timeStr } as any;
+        });
+
+        // Trigger Toast for NEW unread notifications
+        snap.docChanges().forEach(change => {
+          if (change.type === 'added') {
+            const data = change.doc.data();
+            if (!data.read) {
+              uiToast(data.title || 'New Activity', data.message || 'A new update requires your attention.', 'info');
+            }
+          }
+        });
+
+        setNotifications(newNotifs);
     });
 
     // 5. Sync admin settings
@@ -595,7 +602,7 @@ export default function App() {
   };
 
   return (
-    <Router>
+    <>
       <ScrollToTop activePage={activePage} contentRef={contentRef} />
       <Layout 
         activePage={activePage} 
@@ -650,6 +657,6 @@ export default function App() {
           </motion.div>
         </div>
       )}
-    </Router>
+    </>
   );
 }
