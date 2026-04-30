@@ -126,6 +126,12 @@ export default function App() {
       // status ('rejected', 'approved') overrides the generic status in the master 'users' collection.
       [...usersData, ...legacyData, ...rejectedData].forEach(t => {
         if (!t || !t.id) return;
+        
+        // Log status for debugging
+        if (t.status === 'rejected' || t.status === 'approved') {
+           console.log(`[SYNC] Tutor ${t.id} found in specialized collection with status: ${t.status}`);
+        }
+
         const existing: any = merged.get(t.id) || {};
         
         // Smart Merge: Only overwrite if the new value is truthy and not an empty string
@@ -181,6 +187,12 @@ export default function App() {
         mergedTutor.degreeCertificate = mergedTutor.educationCert;
         mergedTutor.experienceCertificate = mergedTutor.experienceCert;
         mergedTutor.avatar = mergedTutor.profilePic;
+
+        // PRIORITY STATUS OVERRIDE: 
+        // If they exist in 'rejectedData', they are DEFINITELY rejected.
+        // If they exist in 'legacyData' (tutors), they are DEFINITELY approved.
+        if (rejectedData.some(r => r.id === t.id)) mergedTutor.status = 'rejected';
+        else if (legacyData.some(l => l.id === t.id)) mergedTutor.status = 'approved';
 
         // Ensure documents object is also populated for components that strictly look there
         mergedTutor.documents = {
@@ -349,7 +361,8 @@ export default function App() {
   // Real-time Automated API Bridge (Server-less Architecture)
   const handleApproveTutor = async (id: string) => {
     try {
-      const response = await fetch('http://localhost:5001/api/admin-tutor-action', {
+      const hostname = window.location.hostname;
+      const response = await fetch(`http://${hostname}:5001/api/admin-tutor-action`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tutorId: id, action: 'approve' })
@@ -372,7 +385,8 @@ export default function App() {
 
   const handleRejectTutor = async (id: string, reason?: string) => {
     try {
-      const response = await fetch('http://localhost:5001/api/admin-tutor-action', {
+      const hostname = window.location.hostname;
+      const response = await fetch(`http://${hostname}:5001/api/admin-tutor-action`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tutorId: id, action: 'reject', reason })
@@ -570,7 +584,8 @@ export default function App() {
             onReject={handleRejectTutor} 
             onResendEmail={async (id) => {
               try {
-                const response = await fetch('http://localhost:5001/api/admin/resend-notification', {
+                const hostname = window.location.hostname;
+                const response = await fetch(`http://${hostname}:5001/api/admin/resend-notification`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ tutorId: id })
