@@ -52,7 +52,7 @@ export const sendPlatformEmail = async (
     `;
   } else if (type === 'reject') {
     subject = "Verification Feedback – Path Forward at Eduqra";
-    const reapplyLink = `https://eduqra-tutor-dashboard.web.app/reapply?email=${encodeURIComponent(payload.email || '')}`;
+    const reapplyLink = `https://eduqra-tutor-dashboard.web.app/?reapply=true&email=${encodeURIComponent(payload.email || '')}`;
     html = `
       <div style="${containerStyle}">
         <div style="${cardStyle}">

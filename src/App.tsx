@@ -119,71 +119,91 @@ export default function App() {
   
   // Unified Merger: Primary Logic for Instant Status Reflection
   React.useEffect(() => {
-    const merged = new Map<string, Tutor>();
-    
-    // Unified Smarter Merger: Ensures no data loss and prefers populated fields
-    [...rejectedData, ...legacyData, ...usersData].forEach(t => {
-      const existing: any = merged.get(t.id) || {};
+    try {
+      const merged = new Map<string, Tutor>();
       
-      // Smart Merge: Only overwrite if the new value is truthy and not an empty string
-      const mergedTutor: any = { ...existing };
-      Object.entries(t).forEach(([key, value]) => {
-        if (value !== null && value !== undefined && value !== '') {
-          mergedTutor[key] = value;
-        }
+      // Specialized collections (rejectedProfiles, tutors) come LAST to ensure their specific 
+      // status ('rejected', 'approved') overrides the generic status in the master 'users' collection.
+      [...usersData, ...legacyData, ...rejectedData].forEach(t => {
+        if (!t || !t.id) return;
+        const existing: any = merged.get(t.id) || {};
+        
+        // Smart Merge: Only overwrite if the new value is truthy and not an empty string
+        const mergedTutor: any = { ...existing };
+        Object.entries(t).forEach(([key, value]) => {
+          if (value !== null && value !== undefined && value !== '') {
+            mergedTutor[key] = value;
+          }
+        });
+        
+        // Preserve and combine document URLs deep
+        const docs = { ...(existing.documents || {}), ...(t.documents || {}) };
+        // Filter out empty strings from docs
+        const cleanDocs: any = {};
+        Object.entries(docs).forEach(([k, v]) => {
+          if (v) cleanDocs[k] = v;
+        });
+        if (Object.keys(cleanDocs).length > 0) mergedTutor.documents = cleanDocs;
+        
+        // Explicit exhaustive fallbacks for top-level fields
+        mergedTutor.profilePic = t.profilePic || t.avatar || existing.profilePic || existing.avatar || t.profileImage || existing.profileImage || t.photoURL || existing.photoURL || t.documents?.profileImage || existing.documents?.profileImage;
+        
+        mergedTutor.identityPic = t.identityPic || t.identityProof || existing.identityPic || existing.identityProof || t.identityURL || existing.identityURL || t.idCard || existing.idCard || t.aadharURL || existing.aadharURL || t.documents?.identityProof || existing.documents?.identityProof;
+        
+        mergedTutor.educationCert = t.educationCert || t.degreeCertificate || existing.educationCert || existing.degreeCertificate || t.degreeURL || existing.degreeURL || t.qualificationDoc || existing.qualificationDoc || t.educationURL || existing.educationURL || t.documents?.degreeCertificate || existing.documents?.degreeCertificate;
+        
+        mergedTutor.experienceCert = t.experienceCert || t.experienceCertificate || existing.experienceCert || existing.experienceCertificate || t.certURL || existing.certURL || t.expDoc || existing.expDoc || t.certificate || existing.certificate || t.expURL || existing.expURL || t.documents?.experienceCertificate || existing.documents?.experienceCertificate;
+        
+        mergedTutor.demoVideo = t.demoVideo || existing.demoVideo || t.videoURL || existing.videoURL || t.demoURL || existing.demoURL || t.liveVideo || existing.liveVideo || t.documents?.demoVideo || existing.documents?.demoVideo;
+        
+        // AUTO-DISCOVERY FALLBACK: If standard fields are still missing, deep-search for any URL-like string
+        const findUrl = (keywords: string[]) => {
+           // Search standard object
+           for (const [key, val] of Object.entries(mergedTutor)) {
+              if (typeof val === 'string' && (val.startsWith('http') || val.startsWith('/') || val.includes('firebasestorage') || val.includes('cloudinary')) && keywords.some(k => key.toLowerCase().includes(k))) return val;
+           }
+           // Search documents sub-object
+           if (mergedTutor.documents && typeof mergedTutor.documents === 'object') {
+             for (const [key, val] of Object.entries(mergedTutor.documents)) {
+                if (typeof val === 'string' && (val.startsWith('http') || val.startsWith('/') || val.includes('firebasestorage') || val.includes('cloudinary')) && keywords.some(k => key.toLowerCase().includes(k))) return val;
+             }
+           }
+           return null;
+        };
+
+        if (!mergedTutor.identityPic) mergedTutor.identityPic = findUrl(['id', 'proof', 'aadhar', 'pan', 'card', 'identity']);
+        if (!mergedTutor.educationCert) mergedTutor.educationCert = findUrl(['degree', 'qualification', 'edu', 'college', 'cert']);
+        if (!mergedTutor.experienceCert) mergedTutor.experienceCert = findUrl(['exp', 'cert', 'work', 'experience']);
+        if (!mergedTutor.demoVideo) mergedTutor.demoVideo = findUrl(['demo', 'video', 'teaching', 'videoURL']);
+
+        // Synchronize legacy fields for full backward compatibility
+        mergedTutor.identityProof = mergedTutor.identityPic;
+        mergedTutor.degreeCertificate = mergedTutor.educationCert;
+        mergedTutor.experienceCertificate = mergedTutor.experienceCert;
+        mergedTutor.avatar = mergedTutor.profilePic;
+
+        // Ensure documents object is also populated for components that strictly look there
+        mergedTutor.documents = {
+          ...(mergedTutor.documents || {}),
+          identityProof: mergedTutor.identityPic,
+          degreeCertificate: mergedTutor.educationCert,
+          experienceCertificate: mergedTutor.experienceCert,
+          demoVideo: mergedTutor.demoVideo,
+          profileImage: mergedTutor.profilePic
+        };
+
+        merged.set(t.id, mergedTutor);
       });
-      
-      // Preserve and combine document URLs deep
-      const docs = { ...(existing.documents || {}), ...(t.documents || {}) };
-      // Filter out empty strings from docs
-      const cleanDocs: any = {};
-      Object.entries(docs).forEach(([k, v]) => {
-        if (v) cleanDocs[k] = v;
-      });
-      if (Object.keys(cleanDocs).length > 0) mergedTutor.documents = cleanDocs;
-      
-      // Explicit exhaustive fallbacks for top-level fields
-      mergedTutor.profilePic = t.profilePic || t.avatar || existing.profilePic || existing.avatar || t.profileImage || existing.profileImage || t.photoURL || existing.photoURL;
-      mergedTutor.identityPic = t.identityPic || t.identityProof || existing.identityPic || existing.identityProof || t.identityURL || existing.identityURL || t.idCard || existing.idCard || t.aadharURL || existing.aadharURL;
-      mergedTutor.educationCert = t.educationCert || t.degreeCertificate || existing.educationCert || existing.degreeCertificate || t.degreeURL || existing.degreeURL || t.qualificationDoc || existing.qualificationDoc || t.educationURL || existing.educationURL;
-      mergedTutor.experienceCert = t.experienceCert || t.experienceCertificate || existing.experienceCert || existing.experienceCertificate || t.certURL || existing.certURL || t.expDoc || existing.expDoc || t.certificate || existing.certificate || t.expURL || existing.expURL;
-      mergedTutor.demoVideo = t.demoVideo || existing.demoVideo || t.videoURL || existing.videoURL || t.demoURL || existing.demoURL || t.liveVideo || existing.liveVideo;
-      
-      // AUTO-DISCOVERY FALLBACK: If standard fields are missing, deep-search for any URL-like string
-      const findUrl = (keywords: string[]) => {
-         // Search standard object
-         for (const [key, val] of Object.entries(mergedTutor)) {
-            if (typeof val === 'string' && (val.startsWith('http') || val.includes('firebasestorage')) && keywords.some(k => key.toLowerCase().includes(k))) return val;
-         }
-         // Search documents sub-object
-         for (const [key, val] of Object.entries(mergedTutor.documents || {})) {
-            if (typeof val === 'string' && (val.startsWith('http') || val.includes('firebasestorage')) && keywords.some(k => key.toLowerCase().includes(k))) return val;
-         }
-         return null;
-      };
 
-      if (!mergedTutor.identityPic) mergedTutor.identityPic = findUrl(['id', 'proof', 'aadhar', 'pan', 'card']);
-      if (!mergedTutor.educationCert) mergedTutor.educationCert = findUrl(['degree', 'qualification', 'edu', 'college']);
-      if (!mergedTutor.experienceCert) mergedTutor.experienceCert = findUrl(['exp', 'cert', 'work', 'experience']);
-      if (!mergedTutor.demoVideo) mergedTutor.demoVideo = findUrl(['demo', 'video', 'teaching', 'videoURL']);
-
-      // Synchronize legacy fields
-      mergedTutor.identityProof = mergedTutor.identityPic;
-      mergedTutor.degreeCertificate = mergedTutor.educationCert;
-      mergedTutor.experienceCertificate = mergedTutor.experienceCert;
-      mergedTutor.avatar = mergedTutor.profilePic;
-
-      merged.set(t.id, mergedTutor);
-    });
-
-    setTutors(Array.from(merged.values()));
-    console.log(`📊 [ADMIN SYNC] Merged ${merged.size} tutors. (${usersData.length} from users collection)`);
-    
-    // Ensure loading is turned off once we have data or the listeners have initialized
-    if (isAuthenticated) {
-      setLoading(false);
+      setTutors(Array.from(merged.values()));
+      console.log(`📊 [ADMIN SYNC] Merged ${merged.size} tutors.`);
+    } catch (err) {
+      console.error("❌ [ADMIN MERGER ERROR]", err);
+    } finally {
+      if (isAuthenticated) setLoading(false);
     }
   }, [usersData, legacyData, rejectedData, isAuthenticated]);
+
 
   React.useEffect(() => {
     if (!isAuthenticated) return;
@@ -329,17 +349,19 @@ export default function App() {
   // Real-time Automated API Bridge (Server-less Architecture)
   const handleApproveTutor = async (id: string) => {
     try {
-      const tutor = tutors.find(t => t.id === id);
-      if (!tutor) throw new Error("Tutor not found in local state");
+      const response = await fetch('http://localhost:5001/api/admin-tutor-action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tutorId: id, action: 'approve' })
+      });
 
-      // 1. Update primary record status
-      const userRef = doc(db, 'users', id);
-      await updateDoc(userRef, { status: 'approved', approvedAt: serverTimestamp() });
+      if (!response.ok) {
+        const errData = await response.json();
+        console.error('[SERVER ERROR] Approval:', errData);
+        throw new Error(errData.message || 'Failed to approve tutor');
+      }
 
-      // 2. Automated Email Trigger (Zero-Cost Cloud Way)
-      await sendTutorNotification(tutor, 'approve');
-
-      uiToast('Approval Success', 'Status updated and email queued.', 'success');
+      uiToast('Approval Success', 'Tutor approved and verification email sent.', 'success');
       return true;
     } catch(err: any) {
       console.error('[ERROR] handleApproveTutor:', err);
@@ -350,21 +372,19 @@ export default function App() {
 
   const handleRejectTutor = async (id: string, reason?: string) => {
     try {
-      const tutor = tutors.find(t => t.id === id);
-      if (!tutor) throw new Error("Tutor not found");
-
-      const feedback = reason || 'Requirements not met.';
-      
-      // 1. Update primary record status
-      await updateDoc(doc(db, 'users', id), { 
-        status: 'rejected', 
-        rejectionReason: feedback 
+      const response = await fetch('http://localhost:5001/api/admin-tutor-action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tutorId: id, action: 'reject', reason })
       });
 
-      // 2. Automated Email Trigger (Zero-Cost Cloud Way)
-      await sendTutorNotification(tutor, 'reject', feedback);
+      if (!response.ok) {
+        const errData = await response.json();
+        console.error('[SERVER ERROR] Rejection:', errData);
+        throw new Error(errData.message || 'Failed to reject tutor');
+      }
 
-      uiToast('Rejection Success', 'User notified and record updated.', 'warning');
+      uiToast('Rejection Success', 'Tutor notified and profile rejected.', 'warning');
       return true;
     } catch(err: any) {
       console.error('[ERROR] handleRejectTutor:', err);
@@ -549,9 +569,16 @@ export default function App() {
             onApprove={handleApproveTutor} 
             onReject={handleRejectTutor} 
             onResendEmail={async (id) => {
-              const tutor = tutors.find(t => t.id === id);
-              if (tutor) {
-                await sendTutorNotification(tutor, tutor.status as any, tutor.rejectionReason);
+              try {
+                const response = await fetch('http://localhost:5001/api/admin/resend-notification', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ tutorId: id })
+                });
+                if (!response.ok) throw new Error('Failed to resend notification');
+                uiToast('Success', 'Notification resent successfully.', 'success');
+              } catch (err: any) {
+                uiToast('Failed', err.message, 'warning');
               }
             }} 
             onToggleBlock={handleToggleBlockTutor}

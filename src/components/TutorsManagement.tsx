@@ -203,8 +203,9 @@ export const TutorsManagement = ({
                         <p className="text-sm font-black text-gray-900 leading-none">{tutor.name}</p>
                         {/* Document Presence Indicator */}
                         <div className="flex gap-0.5">
-                          {(tutor.documents?.identityProof || tutor.identityProof || tutor.identityURL) && <div className="w-1.5 h-1.5 rounded-full bg-blue-500" title="ID Proof Present" />}
-                          {(tutor.documents?.degreeCertificate || tutor.degreeCertificate || tutor.degreeURL) && <div className="w-1.5 h-1.5 rounded-full bg-green-500" title="Degree Present" />}
+                          {(tutor.documents?.identityProof || tutor.identityProof || tutor.identityPic || tutor.identityURL) && <div className="w-1.5 h-1.5 rounded-full bg-blue-500" title="ID Proof Present" />}
+                          {(tutor.documents?.degreeCertificate || tutor.degreeCertificate || tutor.educationCert || tutor.degreeURL) && <div className="w-1.5 h-1.5 rounded-full bg-green-500" title="Degree Present" />}
+                          {(tutor.documents?.experienceCertificate || tutor.experienceCertificate || tutor.experienceCert || tutor.certURL) && <div className="w-1.5 h-1.5 rounded-full bg-amber-500" title="Exp Cert Present" />}
                           {(tutor.documents?.demoVideo || tutor.demoVideo || tutor.videoURL) && <div className="w-1.5 h-1.5 rounded-full bg-rose-500" title="Video Present" />}
                         </div>
                       </div>
@@ -864,7 +865,12 @@ const VerificationCard = ({ title, subtitle, icon, url: initialUrl, type, onView
   const [error, setError] = React.useState(false);
 
   React.useEffect(() => {
-    if (initialUrl && !initialUrl.startsWith('http') && initialUrl.includes('/')) {
+    // ONLY resolve from Firebase Storage if it's NOT a full URL and looks like a storage path
+    // Local paths (starting with /uploads) or full http URLs should be used directly
+    const isLocalPath = typeof initialUrl === 'string' && initialUrl.startsWith('/');
+    const isFullUrl = typeof initialUrl === 'string' && initialUrl.startsWith('http');
+    
+    if (initialUrl && !isFullUrl && !isLocalPath && initialUrl.includes('/')) {
       setLoading(true);
       const storageRef = ref(storage, initialUrl);
       getDownloadURL(storageRef)

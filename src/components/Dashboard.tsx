@@ -127,7 +127,7 @@ export const Dashboard = ({ tutors, students, bookings, setActivePage }: Dashboa
       y: 0, 
       transition: {
         duration: 0.3,
-        ease: 'easeOut'
+        ease: 'easeOut' as const
       }
     },
   };
