@@ -67,7 +67,8 @@ export const Auth = ({ onLogin }: AuthProps) => {
         setTimeout(() => setView('login'), 3000);
       } else if (view === 'forgot') {
         if (step === 'email') {
-          const response = await fetch('http://localhost:5001/api/auth/reset-password', {
+          const hostname = window.location.hostname;
+          const response = await fetch(`http://${hostname}:5001/api/auth/reset-password`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email })
           });
