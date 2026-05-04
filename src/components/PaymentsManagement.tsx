@@ -12,7 +12,7 @@ import {
   Wallet,
   Banknote
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Card, Badge, Button, Table, Modal } from './UI';
 import { Payment } from '../types';
 
@@ -35,8 +35,8 @@ export const PaymentsManagement = ({ payments, onMarkAsPaid }: PaymentsManagemen
   const completedPayments = payments.filter(p => p.status === 'paid').length;
 
   const stats = [
-    { label: 'Total Revenue', value: `$${totalRevenue.toLocaleString()}`, icon: TrendingUp, color: 'text-green-600', bg: 'bg-green-50' },
-    { label: 'Pending Payouts', value: `$${pendingPayouts.toLocaleString()}`, icon: Clock, color: 'text-orange-600', bg: 'bg-orange-50' },
+    { label: 'Total Revenue', value: `₹${totalRevenue.toLocaleString()}`, icon: TrendingUp, color: 'text-green-600', bg: 'bg-green-50' },
+    { label: 'Pending Payouts', value: `₹${pendingPayouts.toLocaleString()}`, icon: Clock, color: 'text-orange-600', bg: 'bg-orange-50' },
     { label: 'Completed Payments', value: completedPayments, icon: CheckCircle2, color: 'text-blue-600', bg: 'bg-blue-50' },
   ];
 
@@ -154,7 +154,7 @@ export const PaymentsManagement = ({ payments, onMarkAsPaid }: PaymentsManagemen
                 </div>
               </td>
               <td className="px-6 py-4">
-                <span className="text-sm font-black text-gray-900">${payment.amount.toLocaleString()}</span>
+                <span className="text-sm font-black text-gray-900">₹{payment.amount.toLocaleString()}</span>
               </td>
               <td className="px-6 py-4">
                 <div className="flex items-center space-x-2">
@@ -248,7 +248,7 @@ export const PaymentsManagement = ({ payments, onMarkAsPaid }: PaymentsManagemen
             <div className="flex items-center justify-between p-8 bg-primary/5 rounded-2xl border border-primary/10">
               <div className="space-y-1">
                 <p className="text-[10px] font-black text-primary uppercase tracking-widest">Amount to Pay</p>
-                <p className="text-4xl font-black text-primary tracking-tight">${selectedPayment.amount.toLocaleString()}</p>
+                <p className="text-4xl font-black text-primary tracking-tight">₹{selectedPayment.amount.toLocaleString()}</p>
               </div>
               <div className="text-right">
                 <Badge variant={selectedPayment.status === 'paid' ? 'success' : 'warning'}>
@@ -288,16 +288,16 @@ export const PaymentsManagement = ({ payments, onMarkAsPaid }: PaymentsManagemen
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-500 font-medium">Tutor Earnings</span>
-                    <span className="font-bold text-gray-900">${selectedPayment.amount.toLocaleString()}</span>
+                    <span className="font-bold text-gray-900">₹{selectedPayment.amount.toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-500 font-medium">Platform Fee (0%)</span>
-                    <span className="font-bold text-gray-900">$0.00</span>
+                    <span className="font-bold text-gray-900">₹0.00</span>
                   </div>
                   <div className="h-px bg-gray-200 my-2" />
                   <div className="flex justify-between text-base">
                     <span className="text-gray-900 font-black">Total Payout</span>
-                    <span className="font-black text-primary">${selectedPayment.amount.toLocaleString()}</span>
+                    <span className="font-black text-primary">₹{selectedPayment.amount.toLocaleString()}</span>
                   </div>
                 </div>
               </div>

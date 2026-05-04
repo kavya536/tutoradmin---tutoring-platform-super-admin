@@ -25,9 +25,10 @@ import {
   ChevronDown,
   AlertCircle,
   Eye,
-  UserX
+  UserX,
+  RotateCcw
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../lib/utils';
 import { Card, Badge, Button, Tabs, Table, Modal } from './UI';
 import { Tutor, Student, Booking } from '../types';
@@ -409,9 +410,15 @@ export const TutorsManagement = ({
                     </Badge>
                     <span className="text-xs text-gray-400 font-bold uppercase tracking-widest flex items-center">
                       <Calendar size={12} className="mr-1.5" />
-                      Joined {selectedTutor.joinedDate || 'Recently'}
+                      Joined {selectedTutor.registrationDate ? new Date(selectedTutor.registrationDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : selectedTutor.joinedDate || 'Recently'}
                     </span>
                   </div>
+                  {selectedTutor.upiId && (
+                    <div className="mt-4 p-3 bg-primary/5 rounded-2xl border border-primary/10 inline-flex flex-col gap-1">
+                      <span className="text-[9px] font-black text-primary/40 uppercase tracking-widest">Tutor UPI ID</span>
+                      <span className="text-xs font-black text-primary font-mono">{selectedTutor.upiId}</span>
+                    </div>
+                  )}
                 </div>
               </div>
               
@@ -556,7 +563,7 @@ export const TutorsManagement = ({
                   {(selectedTutor.documents?.demoVideo || selectedTutor.demoVideo || selectedTutor.videoURL || selectedTutor.demoURL || selectedTutor.liveVideo) ? (
                     <div className="group relative rounded-3xl overflow-hidden bg-gray-900 border-4 border-gray-100 shadow-xl max-w-2xl">
                       <video 
-                        src={selectedTutor.documents?.demoVideo || selectedTutor.documents?.demoVideo || selectedTutor.demoVideo || selectedTutor.videoURL || selectedTutor.demoURL || selectedTutor.liveVideo}
+                        src={selectedTutor.documents?.demoVideo || selectedTutor.demoVideo || selectedTutor.videoURL || selectedTutor.demoURL || selectedTutor.liveVideo}
                         className="w-full aspect-video object-contain"
                         controls
                       />
@@ -568,6 +575,54 @@ export const TutorsManagement = ({
                     </div>
                   )}
                 </div>
+
+                {/* Moderation & Audit History */}
+                {(selectedTutor.rejectionCount || 0) > 0 || (selectedTutor.approvalHistory && selectedTutor.approvalHistory.length > 0) ? (
+                  <div className="mt-12 pt-8 border-t border-gray-100">
+                    <div className="flex items-center justify-between mb-6">
+                      <h5 className="text-[11px] font-black text-rose-500 uppercase tracking-[0.2em] flex items-center gap-2">
+                        <AlertCircle size={14} /> Moderation & Audit History
+                      </h5>
+                      <div className="px-3 py-1 bg-rose-50 text-rose-600 text-[10px] font-black rounded-full border border-rose-100">
+                        {selectedTutor.rejectionCount || 0} Rejections Recorded
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-4">
+                      {selectedTutor.approvalHistory?.slice().reverse().map((entry, idx) => (
+                        <div key={idx} className={cn(
+                          "p-4 rounded-2xl border transition-all",
+                          entry.action === 'rejected' ? "bg-rose-50/30 border-rose-100" : "bg-emerald-50/30 border-emerald-100"
+                        )}>
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              {entry.action === 'rejected' ? <XCircle size={14} className="text-rose-500" /> : <CheckCircle2 size={14} className="text-emerald-500" />}
+                              <span className={cn(
+                                "text-[10px] font-black uppercase tracking-widest",
+                                entry.action === 'rejected' ? "text-rose-600" : "text-emerald-600"
+                              )}>
+                                {entry.action === 'rejected' ? 'Profile Rejected' : 'Profile Approved'}
+                              </span>
+                            </div>
+                            <span className="text-[9px] font-bold text-gray-400 uppercase">
+                              {entry.date} • {entry.time}
+                            </span>
+                          </div>
+                          {entry.reason && (
+                            <p className="text-xs font-medium text-gray-600 leading-relaxed italic">
+                              " {entry.reason} "
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-8 p-6 bg-slate-50 border border-dashed border-slate-200 rounded-3xl text-center">
+                    <ShieldCheck size={20} className="mx-auto mb-2 text-slate-300" />
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">No prior moderation history found</p>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -754,7 +809,7 @@ export const TutorsManagement = ({
         )}
       </Modal>
 
-      {/* FULL SCREEN DOCUMENT VIEWER (The "Real PDF" Experience) */}
+      {/* FULL SCREEN DOCUMENT VIEWER */}
       <Modal
         isOpen={!!fullViewDoc}
         onClose={() => setFullViewDoc(null)}
@@ -763,41 +818,55 @@ export const TutorsManagement = ({
       >
         <div className="bg-slate-900 -mx-6 -mb-6 p-4 md:p-10 min-h-[70vh] flex flex-col items-center">
           <div className="w-full max-w-4xl space-y-6">
-            {fullViewDoc && [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20].map((page) => {
-              // Deep Clean the URL to remove any existing transformations (like pg_1)
-              // so that pg_N works correctly for every page.
-              let baseUrl = fullViewDoc.url;
-              if (baseUrl.includes('/upload/')) {
-                const parts = baseUrl.split('/upload/');
-                const pathSegments = parts[1].split('/');
-                const cleanSegments = pathSegments.filter(seg => 
-                  !seg.includes(',') && !seg.startsWith('pg_') && !seg.startsWith('fl_') && seg !== 'pg_1'
-                );
-                baseUrl = `${parts[0]}/upload/${cleanSegments.join('/')}`;
-              }
-              
-              const pageUrl = baseUrl.includes('cloudinary')
-                ? baseUrl.replace('/upload/', `/upload/pg_${page},q_auto,f_auto/`).replace(/\.pdf$/i, '.jpg')
-                : baseUrl;
+            {fullViewDoc && (
+              (() => {
+                const baseUrl = fullViewDoc.url;
+                const isCloudinary = baseUrl.includes('cloudinary') && baseUrl.includes('/upload/');
+                const isPdf = baseUrl.toLowerCase().includes('.pdf') || baseUrl.includes('pdf') || baseUrl.includes('firebasestorage');
 
-              return (
-                <div key={page} className="relative bg-white shadow-2xl rounded-sm overflow-hidden min-h-[100px]">
-                  <div className="absolute top-4 left-4 z-50 bg-black/60 backdrop-blur-md text-white text-[9px] font-black px-3 py-1.5 rounded-lg border border-white/10 shadow-lg">
-                    PAGE {page}
-                  </div>
-                  <img 
-                    src={pageUrl}
-                    alt={`Document Page ${page}`}
-                    className="w-full h-auto object-contain block"
-                    loading="lazy"
-                    onError={(e) => {
-                      const container = (e.target as HTMLElement).closest('.relative');
-                      if (container) (container as HTMLElement).style.display = 'none';
-                    }}
-                  />
-                </div>
-              );
-            })}
+                if (isPdf && !isCloudinary) {
+                  return (
+                    <div className="w-full h-[85vh] bg-white rounded-xl overflow-hidden shadow-2xl relative group p-4 overflow-y-auto custom-scrollbar">
+                      <PDFRenderer url={baseUrl} onLoading={() => {}} />
+                    </div>
+                  );
+                }
+
+                return [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20].map((page) => {
+                  let cleanBaseUrl = baseUrl;
+                  if (cleanBaseUrl.includes('/upload/')) {
+                    const parts = cleanBaseUrl.split('/upload/');
+                    const pathSegments = parts[1].split('/');
+                    const cleanSegments = pathSegments.filter(seg => 
+                      !seg.includes(',') && !seg.startsWith('pg_') && !seg.startsWith('fl_') && seg !== 'pg_1'
+                    );
+                    cleanBaseUrl = `${parts[0]}/upload/${cleanSegments.join('/')}`;
+                  }
+                  
+                  const pageUrl = cleanBaseUrl.includes('cloudinary')
+                    ? cleanBaseUrl.replace('/upload/', `/upload/pg_${page},q_auto,f_auto/`).replace(/\.pdf$/i, '.jpg')
+                    : cleanBaseUrl;
+
+                  return (
+                    <div key={page} className="relative bg-white shadow-2xl rounded-sm overflow-hidden min-h-[100px]">
+                      <div className="absolute top-4 left-4 z-50 bg-black/60 backdrop-blur-md text-white text-[9px] font-black px-3 py-1.5 rounded-lg border border-white/10 shadow-lg">
+                        PAGE {page}
+                      </div>
+                      <img 
+                        src={pageUrl}
+                        alt={`Document Page ${page}`}
+                        className="w-full h-auto object-contain block"
+                        loading="lazy"
+                        onError={(e) => {
+                          const container = (e.target as HTMLElement).closest('.relative');
+                          if (container) (container as HTMLElement).style.display = 'none';
+                        }}
+                      />
+                    </div>
+                  );
+                });
+              })()
+            )}
             
             <div className="py-12 text-center">
               <div className="inline-flex items-center gap-3 px-6 py-2 bg-white/10 rounded-full border border-white/5">
@@ -844,7 +913,143 @@ export const TutorsManagement = ({
           </div>
         </div>
       </Modal>
+    </div>
+  );
+};
 
+// 🔥 INTERNAL PDF RENDERER (Bypasses Google/Microsoft viewer errors)
+const PDFRenderer = ({ url, onLoading }: { url: string, onLoading: (loading: boolean) => void }) => {
+  const [numPages, setNumPages] = React.useState<number>(0);
+  const [pdf, setPdf] = React.useState<any>(null);
+  const [error, setError] = React.useState(false);
+
+  React.useEffect(() => {
+    let isMounted = true;
+    const loadPdf = async () => {
+      try {
+        onLoading(true);
+        // Dynamically load PDF.js if not present
+        if (!(window as any).pdfjsLib) {
+          const script = document.createElement('script');
+          script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+          document.head.appendChild(script);
+          await new Promise(resolve => script.onload = resolve);
+          (window as any).pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        }
+
+        // 🚨 PREVENT CONSOLE ERRORS: Do not fetch localhost URLs
+        if (url.includes('localhost')) {
+          setError(true);
+          onLoading(false);
+          return;
+        }
+
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`Failed to fetch PDF: ${response.status} ${response.statusText}`);
+        const data = await response.arrayBuffer();
+        
+        if (data.byteLength === 0) {
+          setError(true);
+          onLoading(false);
+          return;
+        }
+
+        const loadingTask = (window as any).pdfjsLib.getDocument({ data });
+        const pdfDoc = await loadingTask.promise;
+        if (isMounted) {
+          setPdf(pdfDoc);
+          setNumPages(pdfDoc.numPages);
+          onLoading(false);
+        }
+      } catch (err) {
+        console.error("PDF.js load error:", err);
+        if (isMounted) {
+          setError(true);
+          onLoading(false);
+        }
+      }
+    };
+    loadPdf();
+    return () => { isMounted = false; };
+  }, [url]);
+
+  if (error) return (
+    <div className="w-full h-full flex flex-col">
+      <div className="flex-1 min-h-[500px] relative bg-slate-50 rounded-xl overflow-hidden border border-gray-100 shadow-inner flex flex-col items-center justify-center p-10 text-center">
+        <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center text-rose-500 mb-4">
+          <AlertTriangle size={32} />
+        </div>
+        <h4 className="text-sm font-black text-gray-900 uppercase tracking-tight mb-2">Document Unreachable</h4>
+        <p className="text-xs text-gray-500 font-medium max-w-xs leading-relaxed">
+          The document link is invalid or the file is missing from the server. This often happens with older 'localhost' registrations.
+        </p>
+        
+        {url.includes('localhost') ? (
+           <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-2xl text-[10px] font-bold text-amber-800 text-left">
+             <p className="flex items-center gap-2 mb-1"><Info size={12}/> SYSTEM NOTE:</p>
+             This file is stored on the tutor's local machine and cannot be accessed from your dashboard.
+           </div>
+        ) : (
+          <iframe 
+            src={`${url}#toolbar=0&view=FitH`} 
+            className="w-full h-full border-none absolute inset-0"
+            title="PDF Fallback Viewer"
+          />
+        )}
+        <div className="absolute top-2 right-2 bg-amber-500 text-white text-[8px] font-black px-2 py-1 rounded-md shadow-lg flex items-center gap-1 uppercase tracking-widest">
+          <AlertCircle size={10} /> Browser Native View
+        </div>
+      </div>
+      <div className="p-4 text-center bg-gray-50/50 border-t border-gray-100">
+        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest"> custom renderer failed • displaying native preview instead </p>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          className="mt-2 rounded-xl text-[10px] font-bold h-8 px-4"
+          onClick={() => window.open(url, '_blank')}
+        >
+          <ExternalLink size={12} className="mr-2" />
+          Open Full Document in New Tab
+        </Button>
+      </div>
+    </div>
+  );
+  if (!pdf) return null;
+
+  return (
+    <div className="space-y-4">
+      {Array.from({ length: numPages }, (_, i) => (
+        <PDFPage key={i} pdf={pdf} pageNum={i + 1} />
+      ))}
+    </div>
+  );
+};
+
+const PDFPage = ({ pdf, pageNum }: { pdf: any, pageNum: number }) => {
+  const canvasRef = React.useRef<HTMLCanvasElement>(null);
+  
+  React.useEffect(() => {
+    const renderPage = async () => {
+      if (!canvasRef.current) return;
+      const page = await pdf.getPage(pageNum);
+      const viewport = page.getViewport({ scale: 1.5 });
+      const canvas = canvasRef.current;
+      const context = canvas.getContext('2d');
+      if (context) {
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+        await page.render({ canvasContext: context, viewport }).promise;
+      }
+    };
+    renderPage();
+  }, [pdf, pageNum]);
+
+  return (
+    <div className="relative group/page shadow-xl rounded-lg overflow-hidden bg-white border border-gray-100">
+      <div className="absolute top-2 left-2 z-10 bg-black/50 backdrop-blur-sm text-white text-[8px] font-bold px-2 py-0.5 rounded opacity-0 group-hover/page:opacity-100 transition-opacity">
+        Page {pageNum}
+      </div>
+      <canvas ref={canvasRef} className="w-full h-auto object-contain" />
     </div>
   );
 };
@@ -894,9 +1099,15 @@ const VerificationCard = ({ title, subtitle, icon, url: initialUrl, type, onView
     type === 'pdf' || 
     url.toLowerCase().includes('.pdf') || 
     url.toLowerCase().includes('pdf') || 
-    url.toLowerCase().includes('google') ||
-    (url.startsWith('https://firebasestorage.googleapis.com') && !url.includes('.jpg') && !url.includes('.png'))
+    (url.includes('firebasestorage') && !url.toLowerCase().includes('.jpg') && !url.toLowerCase().includes('.jpeg') && !url.toLowerCase().includes('.png') && !url.toLowerCase().includes('.webp') && !url.toLowerCase().includes('.gif'))
   );
+
+  // Simplified URL sync to avoid fetch/CORS issues
+  const [blobUrl, setBlobUrl] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    setBlobUrl(url);
+  }, [url]);
 
   return (
     <div className={cn(
@@ -964,40 +1175,45 @@ const VerificationCard = ({ title, subtitle, icon, url: initialUrl, type, onView
                 <div className="flex items-center gap-3">
                   <Badge variant="info" className="text-[8px] py-0 h-4 bg-primary/5 text-primary border-primary/10 tracking-widest px-2 uppercase">Multi-page Doc</Badge>
                 </div>
-                           <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
                   <Button 
                     size="sm"
                     variant="ghost"
                     className="h-7 text-[10px] px-3 font-bold bg-primary/10 text-primary border-primary/20 hover:bg-primary/20"
-                    onClick={() => onViewFull({ url: url, title: title })}
+                    onClick={() => onViewFull({ url: blobUrl || url, title: title })}
                   >
                     <Eye size={12} className="mr-1" />
                     View Document
                   </Button>
-
                 </div>
              </div>
 
             <div className="w-full flex-1 bg-gray-900/5 overflow-y-auto p-4 space-y-4 custom-scrollbar scroll-smooth">
-              {[1, 2, 3, 4, 5].map((page) => (
-                <div key={page} className="relative group/page shadow-xl rounded-lg overflow-hidden bg-white">
-                  <div className="absolute top-2 left-2 z-10 bg-black/50 backdrop-blur-sm text-white text-[8px] font-bold px-2 py-0.5 rounded opacity-0 group-hover/page:opacity-100 transition-opacity">
-                    Page {page}
+              {(() => {
+                const isCloudinary = url.includes('cloudinary') && url.includes('/upload/');
+                if (isPDF && !isCloudinary) {
+                  return <PDFRenderer url={url} onLoading={setLoading} />;
+                }
+                return [1, 2, 3, 4, 5].map((page) => (
+                  <div key={page} className="relative group/page shadow-xl rounded-lg overflow-hidden bg-white">
+                    <div className="absolute top-2 left-2 z-10 bg-black/50 backdrop-blur-sm text-white text-[8px] font-bold px-2 py-0.5 rounded opacity-0 group-hover/page:opacity-100 transition-opacity">
+                      Page {page}
+                    </div>
+                    <img 
+                      src={url.includes('cloudinary') && url.includes('/upload/')
+                        ? url.replace('/upload/', `/upload/pg_${page},q_auto,f_auto/`).replace(/\.pdf$/i, '.jpg')
+                        : url
+                      }
+                      alt={`Document Page ${page}`} 
+                      className="w-full h-auto object-contain transition-transform duration-500 hover:scale-[1.01]"
+                      onError={(e) => {
+                        // Hide the image if the page doesn't exist (e.g. page 4 of a 3-page doc)
+                        (e.target as HTMLImageElement).closest('.relative')?.remove();
+                      }}
+                    />
                   </div>
-                  <img 
-                    src={url.includes('cloudinary') && url.includes('/upload/')
-                      ? url.replace('/upload/', `/upload/pg_${page},q_auto,f_auto/`).replace(/\.pdf$/i, '.jpg')
-                      : url
-                    }
-                    alt={`Document Page ${page}`} 
-                    className="w-full h-auto object-contain transition-transform duration-500 hover:scale-[1.01]"
-                    onError={(e) => {
-                      // Hide the image if the page doesn't exist (e.g. page 4 of a 3-page doc)
-                      (e.target as HTMLImageElement).closest('.relative')?.remove();
-                    }}
-                  />
-                </div>
-              ))}
+                ));
+              })()}
               
               <div className="py-8 text-center">
                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">• End of Document •</p>

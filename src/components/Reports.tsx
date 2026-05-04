@@ -190,7 +190,7 @@ export const Reports = () => {
                     </div>
                   </div>
                 </div>
-                <span className="text-sm font-black text-primary">${tutor.revenue}</span>
+                <span className="text-sm font-black text-primary">₹{tutor.revenue}</span>
               </div>
             ))}
           </div>

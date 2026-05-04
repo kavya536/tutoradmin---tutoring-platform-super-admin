@@ -11,7 +11,7 @@ import {
   ArrowLeft,
   Trash2
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Card, Badge, Button } from './UI';
 import { Review } from '../types';
 import { cn } from '../lib/utils';

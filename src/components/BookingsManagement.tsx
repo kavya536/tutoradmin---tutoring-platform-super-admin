@@ -13,16 +13,86 @@ import {
   CheckCircle2,
   XCircle
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Card, Badge, Button, Tabs, Table, Modal } from './UI';
 import { Booking } from '../types';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, updateDoc, serverTimestamp, getDoc, increment, query, collection, where, getDocs, addDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 
 interface BookingsManagementProps {
   bookings: Booking[];
   onUpdateStatus?: (id: string, status: string) => void;
 }
+
+// Centralized Subject Master System
+const SUBJECT_MASTER: Record<string, { name: string, aliases: string[] }> = {
+  'mathematics': {
+    name: 'Mathematics',
+    aliases: ['maths', 'math', 'mathemathics', 'calculus', 'algebra', 'maths 1a', 'maths 1b', 'maths 2a', 'maths 2b', 'discrete mathematics', 'mathematics (b.tech/b.sc)']
+  },
+  'physics': {
+    name: 'Physics',
+    aliases: ['phisics', 'phys']
+  },
+  'chemistry': {
+    name: 'Chemistry',
+    aliases: ['chemestry', 'chem']
+  },
+  'biology': {
+    name: 'Biology',
+    aliases: ['bio', 'biological sciences']
+  },
+  'computer_science': {
+    name: 'Computer Science',
+    aliases: ['cs', 'computer', 'programming', 'it', 'java', 'python', 'c programming', 'html/css', 'javascript', 'react.js', 'node.js', 'sql/mysql', 'postgresql', 'artificial intelligence', 'machine learning']
+  },
+  'english': {
+    name: 'English',
+    aliases: ['english language', 'literature']
+  },
+  'social_studies': {
+    name: 'Social Studies',
+    aliases: ['sst', 'social science', 'history', 'geography', 'civics']
+  },
+  'hindi': {
+    name: 'Hindi',
+    aliases: []
+  },
+  'sanskrit': {
+    name: 'Sanskrit',
+    aliases: []
+  },
+  'telugu': {
+    name: 'Telugu',
+    aliases: []
+  },
+  'business_studies': {
+    name: 'Business Studies',
+    aliases: ['business', 'bst']
+  },
+  'accountancy': {
+    name: 'Accountancy',
+    aliases: ['accounts', 'accounting']
+  },
+  'economics': {
+    name: 'Economics',
+    aliases: ['eco']
+  },
+  'science': {
+    name: 'Science',
+    aliases: ['general science']
+  },
+  'evs': {
+    name: 'EVS',
+    aliases: ['environmental science']
+  }
+};
+
+const getSubjectName = (id: string): string => {
+  if (!id || typeof id !== 'string') return 'General Session';
+  const normalized = id.toLowerCase();
+  return SUBJECT_MASTER[normalized]?.name || id.charAt(0).toUpperCase() + id.slice(1);
+};
 
 export const BookingsManagement = ({ bookings }: BookingsManagementProps) => {
   const [activeTab, setActiveTab] = React.useState('All');
@@ -46,44 +116,108 @@ export const BookingsManagement = ({ bookings }: BookingsManagementProps) => {
   const tabs = ['All', 'Pending', 'Confirmed', 'Cancelled', 'Cancellations'];
 
   const calculateRefund = (booking: Booking) => {
-    if (!booking.amount) return { eligible: false, refundAmount: 0 };
+    if (!booking.amount) return { eligible: false, refundAmount: 0, reason: "No payment found" };
+
     const platformFeeRate = 0.17;
     const totalAmount = booking.amount;
     const platformFee = totalAmount * platformFeeRate;
+    const originalAmount = totalAmount - platformFee;
     
     const paidAt = (booking as any).paidAt?.toDate ? (booking as any).paidAt.toDate() : (booking.paidAt ? new Date(booking.paidAt) : null);
-    if (!paidAt) return { eligible: false, refundAmount: 0 };
+    if (!paidAt) return { eligible: false, refundAmount: 0, reason: "Payment date unknown" };
 
     const now = new Date();
     const diffTime = Math.abs(now.getTime() - paidAt.getTime());
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
-    // Plan-Specific Flags (using amount types and common conventions)
-    const isSubscription = booking.status === 'confirmed' && (booking as any).isSubscription;
-    const isMonthlyOrCourse = !isSubscription; // Simplified for Admin view context
+    const tier = (booking as any).tierAtBooking || (booking as any).plan?.includes('premium') ? 'premium' : (booking as any).plan?.includes('standard') ? 'standard' : 'free';
+    const attendedClasses = (booking as any).attendedCount || 0;
 
-    if (isMonthlyOrCourse && diffDays >= 15) {
-      return { eligible: false, refundAmount: 0, reason: "15-day window expired" };
+    let eligible = false;
+    let refundAmount = 0;
+    let reason = "";
+
+    if (tier === 'free') {
+      if (diffDays <= 3) {
+        eligible = true;
+        refundAmount = originalAmount;
+        reason = "Within 3-day window";
+      } else {
+        eligible = false;
+        reason = "3-day window expired";
+      }
+    } else {
+      if (diffDays <= 3 && attendedClasses <= 3) {
+        const totalDays = parseFloat(booking.duration || '1') * 30;
+        const completedDaysCost = originalAmount * (attendedClasses / totalDays);
+        const deduction = totalAmount * 0.03;
+        refundAmount = totalAmount - completedDaysCost - deduction;
+        eligible = refundAmount > 0;
+        reason = "Early Cancellation (≤3 days)";
+      } else {
+        const totalDurationDays = 90;
+        const daysLeft = totalDurationDays - diffDays;
+        if (daysLeft > 10) {
+          const refundPercent = tier === 'premium' ? 0.40 : 0.20;
+          refundAmount = originalAmount * refundPercent;
+          eligible = true;
+          reason = `Flat ${refundPercent * 100}% Refund`;
+        } else {
+          eligible = false;
+          reason = "Last 10 days of plan";
+        }
+      }
     }
 
-    // New Split Logic: Tutor 50%, Platform 17%, Student remainder
-    const tutorShare = totalAmount * 0.5;
-    const refundAmount = totalAmount - tutorShare - platformFee;
-
     return { 
-      eligible: true, 
+      eligible: eligible && refundAmount > 0, 
       refundAmount: Math.max(0, Math.floor(refundAmount)),
-      breakdown: { platformFee: Math.floor(platformFee), tutorShare: Math.floor(tutorShare), diffDays }
+      reason,
+      breakdown: { platformFee: Math.floor(platformFee), originalAmount: Math.floor(originalAmount), diffDays, tier, attendedClasses }
     };
   };
 
   const handleUpdateStatus = async (id: string, newStatus: string) => {
     setIsProcessing(true);
     try {
-      await updateDoc(doc(db, 'bookings', id), { 
+      const bookingRef = doc(db, 'bookings', id);
+      const bookingSnap = await getDoc(bookingRef);
+      const bookingData = bookingSnap.data() as Booking;
+
+      await updateDoc(bookingRef, { 
         status: newStatus,
         adminResolutionAt: serverTimestamp()
       });
+
+      // Handle Wallet Refund if approved and student wants to re-book
+      if (newStatus === 'cancelled' && (bookingData as any).wantsNewTutor) {
+        const refund = calculateRefund(bookingData);
+        if (refund.eligible && refund.refundAmount > 0) {
+          const studentEmail = bookingData.studentEmail;
+          if (studentEmail) {
+            // Find student by email
+            const studentQuery = query(collection(db, 'students'), where('email', '==', studentEmail));
+            const studentSnap = await getDocs(studentQuery);
+            if (!studentSnap.empty) {
+              const studentDoc = studentSnap.docs[0];
+              await updateDoc(doc(db, 'students', studentDoc.id), {
+                walletBalance: increment(refund.refundAmount)
+              });
+
+              // Notify student
+              await addDoc(collection(db, 'notifications'), {
+                userId: studentDoc.id,
+                type: 'update',
+                title: 'Refund Credited to Wallet',
+                message: `₹${refund.refundAmount} has been credited to your wallet for future bookings.`,
+                time: new Date().toISOString(),
+                read: false
+              });
+            }
+          }
+        }
+      }
+
       setSelectedBooking(null);
     } catch (err) {
       console.error("Failed to update booking status:", err);
@@ -178,7 +312,7 @@ export const BookingsManagement = ({ bookings }: BookingsManagementProps) => {
                   <div className="p-1.5 bg-gray-50 rounded-lg">
                     <BookOpen size={14} className="text-gray-400" />
                   </div>
-                  <span className="text-sm font-bold text-gray-700">{booking.subject}</span>
+                  <span className="text-sm font-bold text-gray-700">{getSubjectName(booking.subject)}</span>
                 </div>
               </td>
               <td className="px-4 sm:px-6 py-4">
@@ -295,11 +429,31 @@ export const BookingsManagement = ({ bookings }: BookingsManagementProps) => {
                     const refund = calculateRefund(selectedBooking);
                     return (
                       <div className="space-y-6">
+                        <div className="bg-white/40 p-4 rounded-xl border border-rose-100/50 mb-6">
+                           <div className="flex justify-between items-start mb-3">
+                             <div>
+                               <p className="text-[9px] font-black text-rose-400 uppercase tracking-widest">Cancellation Reason</p>
+                               <p className="text-sm font-bold text-rose-900">{(selectedBooking as any).cancellationReason || 'Not provided'}</p>
+                             </div>
+                             <div className="text-right">
+                               <p className="text-[9px] font-black text-rose-400 uppercase tracking-widest">Re-booking Choice</p>
+                               <Badge variant={(selectedBooking as any).wantsNewTutor ? 'success' : 'default'} className="mt-1">
+                                 {(selectedBooking as any).wantsNewTutor ? 'Wants New Tutor' : 'Full Exit'}
+                               </Badge>
+                             </div>
+                           </div>
+                           {(selectedBooking as any).wantsNewTutor && (
+                             <p className="text-[10px] text-emerald-600 font-bold flex items-center gap-1.5 mt-2 bg-emerald-50/50 p-2 rounded-lg border border-emerald-100">
+                               <RefreshCw size={10} /> Refund will be credited to student wallet balance.
+                             </p>
+                           )}
+                        </div>
+
                         <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-4">
                             <div className="flex flex-col">
                               <span className="text-[9px] font-black text-rose-400 uppercase tracking-widest">Usage Period</span>
-                              <span className="text-sm font-bold text-rose-900">{refund.breakdown?.diffDays || 0} Days Used</span>
+                              <span className="text-sm font-bold text-rose-900">{refund.breakdown?.diffDays || 0} Days Used ({refund.breakdown?.attendedClasses || 0} Classes)</span>
                             </div>
                             <div className="flex flex-col">
                               <span className="text-[9px] font-black text-rose-400 uppercase tracking-widest">Platform Fee (17%)</span>

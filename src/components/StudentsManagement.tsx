@@ -11,7 +11,7 @@ import {
   UserX,
   ShieldCheck
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Card, Badge, Button, Table, Modal } from './UI';
 import { Student, Booking } from '../types';
 
@@ -307,6 +307,12 @@ export const StudentsManagement = ({ students, bookings, onToggleBlock, initialS
                     <GraduationCap size={14} className="mr-2" />
                     {selectedStudent.class}
                   </div>
+                  {selectedStudent.registrationDate && (
+                    <div className="flex items-center text-[11px] text-primary/50 font-black uppercase tracking-widest mt-1">
+                      <Calendar size={12} className="mr-2" />
+                      Joined: {new Date(selectedStudent.registrationDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="flex flex-col gap-2">
@@ -333,6 +339,12 @@ export const StudentsManagement = ({ students, bookings, onToggleBlock, initialS
                     {selectedStudent.status}
                   </Badge>
                 </div>
+                {selectedStudent.upiId && (
+                  <div className="p-3 bg-primary/5 rounded-xl border border-primary/10 flex flex-col gap-1">
+                    <span className="text-[9px] font-black text-primary/40 uppercase tracking-widest">Student UPI ID</span>
+                    <span className="text-xs font-black text-primary font-mono">{selectedStudent.upiId}</span>
+                  </div>
+                )}
               </div>
             </div>
 

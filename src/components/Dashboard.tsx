@@ -11,7 +11,7 @@ import {
   Calendar,
 } from 'lucide-react';
 import { Card, Badge, Button } from './UI';
-import { motion, AnimatePresence, Variants } from 'motion/react';
+import { motion, AnimatePresence, Variants } from 'framer-motion';
 import { 
   AreaChart, 
   Area, 
@@ -30,7 +30,7 @@ interface DashboardProps {
   setActivePage: (page: string) => void;
 }
 
-export const Dashboard = ({ tutors, students, bookings, setActivePage }: DashboardProps) => {
+export const Dashboard = ({ tutors, students, bookings, payments, setActivePage }: DashboardProps) => {
   const navigate = useNavigate();
   const [dateRange, setDateRange] = React.useState<'today' | '7days' | '30days' | '1year' | 'all'>('today');
   const [selectedStudent, setSelectedStudent] = React.useState<Student | null>(null);

@@ -11,7 +11,7 @@ import {
   EyeOff
 } from 'lucide-react';
 import { Card, Button } from './UI';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { AdminSettingsData } from '../types';
 
 interface SettingsProps {

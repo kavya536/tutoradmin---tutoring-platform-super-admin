@@ -5,13 +5,22 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export type Status = 'pending' | 'approved' | 'rejected' | 'confirmed' | 'cancelled' | 'paid' | 'blocked' | 'active';
+export interface RejectionHistory {
+  reason: string;
+  date: string;
+  time: string;
+  action: 'rejected' | 'approved';
+}
 
 export interface Tutor {
   id: string;
   name: string;
   email: string;
   phone?: string;
+  upiId?: string;
+  registrationDate?: string;
+  rejectionCount?: number;
+  approvalHistory?: RejectionHistory[];
   // Registration stores qualification (not subjects array)
   qualification?: string;
   targetClasses?: string;
@@ -68,6 +77,8 @@ export interface Student {
   totalBookings: number;
   status: 'active' | 'blocked';
   avatar: string;
+  upiId?: string;
+  registrationDate?: string;
 }
 
 export interface Booking {
@@ -90,6 +101,8 @@ export interface Booking {
   reviewRating?: number;
   reviewComment?: string;
   reviewedAt?: any;
+  duration?: string;
+  wantsNewTutor?: boolean;
 }
 
 export interface Payment {

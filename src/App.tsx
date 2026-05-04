@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { LogOut } from 'lucide-react';
 import { auth } from './firebase';
 import { onAuthStateChanged, signOut, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
@@ -23,7 +23,7 @@ import {
 } from './mockData';
 import { Tutor, Student, Booking, Payment, Review, Notification, AdminSettingsData } from './types';
 import { db } from './firebase';
-import { collection, query, where, onSnapshot, doc, updateDoc, serverTimestamp, orderBy, deleteField, setDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, updateDoc, getDoc, setDoc, deleteDoc, serverTimestamp, orderBy, deleteField, arrayUnion, increment } from 'firebase/firestore';
 
 const defaultAdminSettings = (fallbackName: string, fallbackEmail: string): AdminSettingsData => ({
   profile: {
@@ -112,133 +112,57 @@ export default function App() {
   const [reviews, setReviews] = React.useState<Review[]>(MOCK_REVIEWS);
   const [notifications, setNotifications] = React.useState<Notification[]>([]);
   const [usersData, setUsersData] = React.useState<Tutor[]>([]);
-  const [legacyData, setLegacyData] = React.useState<Tutor[]>([]);
-  const [rejectedData, setRejectedData] = React.useState<Tutor[]>([]);
   const [appToast, setAppToast] = React.useState<{ title: string; message: string; type: 'info' | 'warning' | 'success' } | null>(null);
   const [adminSettings, setAdminSettings] = React.useState<AdminSettingsData>(defaultAdminSettings(auth.currentUser?.displayName || 'Super Admin', auth.currentUser?.email || ''));
   
   // Unified Merger: Primary Logic for Instant Status Reflection
   React.useEffect(() => {
     try {
-      const merged = new Map<string, Tutor>();
-      
-      // Specialized collections (rejectedProfiles, tutors) come LAST to ensure their specific 
-      // status ('rejected', 'approved') overrides the generic status in the master 'users' collection.
-      [...usersData, ...legacyData, ...rejectedData].forEach(t => {
-        if (!t || !t.id) return;
+      const processed = usersData.map(t => {
+        if (!t || !t.id) return null;
         
-        // Log status for debugging
-        if (t.status === 'rejected' || t.status === 'approved') {
-           console.log(`[SYNC] Tutor ${t.id} found in specialized collection with status: ${t.status}`);
-        }
-
-        const existing: any = merged.get(t.id) || {};
+        const tutor: any = { ...t };
         
-        // Smart Merge: Only overwrite if the new value is truthy and not an empty string
-        const mergedTutor: any = { ...existing };
-        Object.entries(t).forEach(([key, value]) => {
-          if (value !== null && value !== undefined && value !== '') {
-            mergedTutor[key] = value;
-          }
-        });
-        
-        // Preserve and combine document URLs deep
-        const docs = { ...(existing.documents || {}), ...(t.documents || {}) };
-        // Filter out empty strings from docs
-        const cleanDocs: any = {};
-        Object.entries(docs).forEach(([k, v]) => {
-          if (v) cleanDocs[k] = v;
-        });
-        if (Object.keys(cleanDocs).length > 0) mergedTutor.documents = cleanDocs;
-        
-        // Explicit exhaustive fallbacks for top-level fields
-        mergedTutor.profilePic = t.profilePic || t.avatar || existing.profilePic || existing.avatar || t.profileImage || existing.profileImage || t.photoURL || existing.photoURL || t.documents?.profileImage || existing.documents?.profileImage;
-        
-        mergedTutor.identityPic = t.identityPic || t.identityProof || existing.identityPic || existing.identityProof || t.identityURL || existing.identityURL || t.idCard || existing.idCard || t.aadharURL || existing.aadharURL || t.documents?.identityProof || existing.documents?.identityProof;
-        
-        mergedTutor.educationCert = t.educationCert || t.degreeCertificate || existing.educationCert || existing.degreeCertificate || t.degreeURL || existing.degreeURL || t.qualificationDoc || existing.qualificationDoc || t.educationURL || existing.educationURL || t.documents?.degreeCertificate || existing.documents?.degreeCertificate;
-        
-        mergedTutor.experienceCert = t.experienceCert || t.experienceCertificate || existing.experienceCert || existing.experienceCertificate || t.certURL || existing.certURL || t.expDoc || existing.expDoc || t.certificate || existing.certificate || t.expURL || existing.expURL || t.documents?.experienceCertificate || existing.documents?.experienceCertificate;
-        
-        mergedTutor.demoVideo = t.demoVideo || existing.demoVideo || t.videoURL || existing.videoURL || t.demoURL || existing.demoURL || t.liveVideo || existing.liveVideo || t.documents?.demoVideo || existing.documents?.demoVideo;
-        
-        // AUTO-DISCOVERY FALLBACK: If standard fields are still missing, deep-search for any URL-like string
-        const findUrl = (keywords: string[]) => {
-           // Search standard object
-           for (const [key, val] of Object.entries(mergedTutor)) {
-              if (typeof val === 'string' && (val.startsWith('http') || val.startsWith('/') || val.includes('firebasestorage') || val.includes('cloudinary')) && keywords.some(k => key.toLowerCase().includes(k))) return val;
-           }
-           // Search documents sub-object
-           if (mergedTutor.documents && typeof mergedTutor.documents === 'object') {
-             for (const [key, val] of Object.entries(mergedTutor.documents)) {
-                if (typeof val === 'string' && (val.startsWith('http') || val.startsWith('/') || val.includes('firebasestorage') || val.includes('cloudinary')) && keywords.some(k => key.toLowerCase().includes(k))) return val;
-             }
-           }
-           return null;
+        // Ensure documents object is populated for components that strictly look there
+        tutor.documents = {
+          ...(t.documents || {}),
+          identityProof: t.identityPic || t.identityProof || t.documents?.identityProof,
+          degreeCertificate: t.educationCert || t.degreeCertificate || t.documents?.degreeCertificate,
+          experienceCertificate: t.experienceCert || t.experienceCertificate || t.documents?.experienceCertificate,
+          demoVideo: t.demoVideo || t.documents?.demoVideo,
+          profileImage: t.profilePic || t.avatar || t.profileImage || t.documents?.profileImage
         };
 
-        if (!mergedTutor.identityPic) mergedTutor.identityPic = findUrl(['id', 'proof', 'aadhar', 'pan', 'card', 'identity']);
-        if (!mergedTutor.educationCert) mergedTutor.educationCert = findUrl(['degree', 'qualification', 'edu', 'college', 'cert']);
-        if (!mergedTutor.experienceCert) mergedTutor.experienceCert = findUrl(['exp', 'cert', 'work', 'experience']);
-        if (!mergedTutor.demoVideo) mergedTutor.demoVideo = findUrl(['demo', 'video', 'teaching', 'videoURL']);
+        // Standardize primary display fields from either top-level or documents
+        tutor.profilePic = tutor.documents.profileImage;
+        tutor.identityPic = tutor.documents.identityProof;
+        tutor.educationCert = tutor.documents.degreeCertificate;
+        tutor.experienceCert = tutor.documents.experienceCertificate;
+        tutor.demoVideo = tutor.documents.demoVideo;
 
-        // Synchronize legacy fields for full backward compatibility
-        mergedTutor.identityProof = mergedTutor.identityPic;
-        mergedTutor.degreeCertificate = mergedTutor.educationCert;
-        mergedTutor.experienceCertificate = mergedTutor.experienceCert;
-        mergedTutor.avatar = mergedTutor.profilePic;
+        return tutor as Tutor;
+      }).filter(Boolean);
 
-        // PRIORITY STATUS OVERRIDE: 
-        // If they exist in 'rejectedData', they are DEFINITELY rejected.
-        // If they exist in 'legacyData' (tutors), they are DEFINITELY approved.
-        if (rejectedData.some(r => r.id === t.id)) mergedTutor.status = 'rejected';
-        else if (legacyData.some(l => l.id === t.id)) mergedTutor.status = 'approved';
-
-        // Ensure documents object is also populated for components that strictly look there
-        mergedTutor.documents = {
-          ...(mergedTutor.documents || {}),
-          identityProof: mergedTutor.identityPic,
-          degreeCertificate: mergedTutor.educationCert,
-          experienceCertificate: mergedTutor.experienceCert,
-          demoVideo: mergedTutor.demoVideo,
-          profileImage: mergedTutor.profilePic
-        };
-
-        merged.set(t.id, mergedTutor);
-      });
-
-      setTutors(Array.from(merged.values()));
-      console.log(`📊 [ADMIN SYNC] Merged ${merged.size} tutors.`);
+      setTutors(processed as Tutor[]);
+      console.log(`📊 [ADMIN SYNC] Processed ${processed.length} tutors from Single Source.`);
     } catch (err) {
-      console.error("❌ [ADMIN MERGER ERROR]", err);
+      console.error("❌ [ADMIN SYNC ERROR]", err);
     } finally {
       if (isAuthenticated) setLoading(false);
     }
-  }, [usersData, legacyData, rejectedData, isAuthenticated]);
+  }, [usersData, isAuthenticated]);
 
 
   React.useEffect(() => {
     if (!isAuthenticated) return;
     setLoading(true);
     
-    // 1. Unified Synchronization for all Tutors across Legacy & Unified collections
-
-    // 1. Independent Listeners for all collections
-    // BROADENED QUERY: Listen to all 'tutor' roles, or anyone with a status field (fallback for incomplete registration)
+    // 1. Unified Synchronization for all Tutors
     const unsubUsers = onSnapshot(query(collection(db, 'users'), where('role', 'in', ['tutor', 'Tutor'])), (snap) => {
       const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
-      console.log(`👥 [FIRESTORE] Users sync: ${data.length} records found.`);
       setUsersData(data);
     }, (err) => {
       console.error("❌ [FIRESTORE ERROR] Users Query:", err);
-    });
-
-    const unsubTutors = onSnapshot(collection(db, 'tutors'), (snap) => {
-      setLegacyData(snap.docs.map(d => ({ id: d.id, ...d.data() } as any)));
-    });
-
-    const unsubRejected = onSnapshot(collection(db, 'rejectedProfiles'), (snap) => {
-      setRejectedData(snap.docs.map(d => ({ id: d.id, ...d.data() } as any)));
     });
 
     // 2. Sync Students
@@ -329,8 +253,6 @@ export default function App() {
 
     return () => {
       unsubUsers();
-      unsubTutors();
-      unsubRejected();
       unsubStudents();
       unsubBookings();
       unsubNotifs();
@@ -361,20 +283,41 @@ export default function App() {
   // Real-time Automated API Bridge (Server-less Architecture)
   const handleApproveTutor = async (id: string) => {
     try {
+      console.log(`[ACTION] Approving tutor: ${id}`);
+      
+      // 1. Direct Firestore Update (Client-side)
+      // Since the admin is logged in, they have permission to write directly.
+      const tutorRef = doc(db, 'users', id);
+      const tutorSnap = await getDoc(tutorRef);
+      if (!tutorSnap.exists()) throw new Error("Tutor not found.");
+      const tutorData = tutorSnap.data();
+
+      const historyItem = {
+        action: 'approved',
+        reason: 'Approved by Admin',
+        date: new Date().toLocaleDateString(),
+        time: new Date().toLocaleTimeString()
+      };
+
+      // Update collections directly
+      await updateDoc(tutorRef, { 
+        status: 'approved', 
+        approvedAt: serverTimestamp(),
+        approvalHistory: arrayUnion(historyItem)
+      });
+      
+      // Cleanup rejection
+      try { await deleteDoc(doc(db, 'rejectedProfiles', id)); } catch(e) {}
+
+      // 2. Notify Backend to send Email
       const hostname = window.location.hostname;
-      const response = await fetch(`http://${hostname}:5001/api/admin-tutor-action`, {
+      await fetch(`http://${hostname}:5001/api/admin-tutor-action`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tutorId: id, action: 'approve' })
-      });
+      }).catch(e => console.warn("Email notification failed, but DB updated:", e));
 
-      if (!response.ok) {
-        const errData = await response.json();
-        console.error('[SERVER ERROR] Approval:', errData);
-        throw new Error(errData.message || 'Failed to approve tutor');
-      }
-
-      uiToast('Approval Success', 'Tutor approved and verification email sent.', 'success');
+      uiToast('Approval Success', 'Tutor approved and profile activated.', 'success');
       return true;
     } catch(err: any) {
       console.error('[ERROR] handleApproveTutor:', err);
@@ -385,18 +328,37 @@ export default function App() {
 
   const handleRejectTutor = async (id: string, reason?: string) => {
     try {
-      const hostname = window.location.hostname;
-      const response = await fetch(`http://${hostname}:5001/api/admin-tutor-action`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tutorId: id, action: 'reject', reason })
+      console.log(`[ACTION] Rejecting tutor: ${id}`);
+      const feedback = reason || 'Requirements not met.';
+
+      const tutorRef = doc(db, 'users', id);
+      const tutorSnap = await getDoc(tutorRef);
+      if (!tutorSnap.exists()) throw new Error("Tutor not found.");
+      const tutorData = tutorSnap.data();
+
+      const historyItem = {
+        action: 'rejected',
+        reason: feedback,
+        date: new Date().toLocaleDateString(),
+        time: new Date().toLocaleTimeString()
+      };
+
+      // 1. Update collections directly
+      await updateDoc(tutorRef, { 
+        status: 'rejected', 
+        rejectionReason: feedback,
+        rejectedAt: serverTimestamp(),
+        rejectionCount: increment(1),
+        approvalHistory: arrayUnion(historyItem)
       });
 
-      if (!response.ok) {
-        const errData = await response.json();
-        console.error('[SERVER ERROR] Rejection:', errData);
-        throw new Error(errData.message || 'Failed to reject tutor');
-      }
+      // 2. Notify Backend to send Email
+      const hostname = window.location.hostname;
+      await fetch(`http://${hostname}:5001/api/admin-tutor-action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tutorId: id, action: 'reject', reason: feedback })
+      }).catch(e => console.warn("Email notification failed, but DB updated:", e));
 
       uiToast('Rejection Success', 'Tutor notified and profile rejected.', 'warning');
       return true;
