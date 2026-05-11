@@ -79,6 +79,12 @@ export interface Student {
   avatar: string;
   upiId?: string;
   registrationDate?: string;
+  walletBalance?: number;
+  subscription?: {
+    tier: 'free' | 'standard' | 'premium';
+    startDate?: any;
+    expiresAt?: any;
+  };
 }
 
 export interface Booking {
@@ -90,7 +96,9 @@ export interface Booking {
   dateTime: string;
   date?: string;
   time?: string;
-  status: 'pending' | 'confirmed' | 'cancelled' | 'completed' | 'pending_cancellation';
+  status: 'pending' | 'confirmed' | 'cancelled' | 'completed' | 'pending_cancellation' | 'approved_cancellation' | 'rejected_cancellation' | 'refund_processing' | 'refund_completed';
+  studentReason?: string;
+  requestType?: string;
   cancellationReason?: string;
   amount?: number;
   tutorId: string;
@@ -103,6 +111,32 @@ export interface Booking {
   reviewedAt?: any;
   duration?: string;
   wantsNewTutor?: boolean;
+  isCancelled?: boolean;
+  bookedAnotherTutor?: boolean;
+  alreadyGotRefund?: boolean;
+  cancellationAdminStatus?: 'pending' | 'approved' | 'rejected';
+  refundStatus?: 'none' | 'pending' | 'paid' | 'failed' | 'completed';
+  tutorPayoutStatus?: 'pending' | 'paid';
+  tutorPayoutDate?: string;
+  startTime?: string;
+  endTime?: string;
+  upiId?: string;
+  transactionLedger?: Array<{
+    amount: number;
+    type: string;
+    date: string;
+    time: string;
+    status: string;
+    upiId?: string;
+  }>;
+  planName?: string;
+  planStartDate?: string;
+  planEndDate?: string;
+  autoRefunded?: boolean;
+  refundAmount?: number;
+  cancellationAdminReason?: string;
+  adminResolutionAt?: any;
+  wantsRefund?: boolean;
 }
 
 export interface Payment {
@@ -167,4 +201,15 @@ export interface AdminSettingsData {
   security: {
     lastPasswordChangedAt: string;
   };
+}
+
+export interface LandingQuery {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  message: string;
+  source: string;
+  status: 'new' | 'responded' | 'resolved';
+  createdAt: any;
 }

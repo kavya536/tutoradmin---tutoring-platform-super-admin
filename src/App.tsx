@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { LogOut } from 'lucide-react';
 import { auth } from './firebase';
 import { onAuthStateChanged, signOut, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
@@ -21,7 +21,7 @@ import {
   MOCK_PAYMENTS, 
   MOCK_REVIEWS 
 } from './mockData';
-import { Tutor, Student, Booking, Payment, Review, Notification, AdminSettingsData } from './types';
+import { Tutor, Student, Booking, Payment, Review, Notification, AdminSettingsData, LandingQuery } from './types';
 import { db } from './firebase';
 import { collection, query, where, onSnapshot, doc, updateDoc, getDoc, setDoc, deleteDoc, serverTimestamp, orderBy, deleteField, arrayUnion, increment } from 'firebase/firestore';
 
@@ -111,6 +111,7 @@ export default function App() {
   const [payments, setPayments] = React.useState<Payment[]>(MOCK_PAYMENTS);
   const [reviews, setReviews] = React.useState<Review[]>(MOCK_REVIEWS);
   const [notifications, setNotifications] = React.useState<Notification[]>([]);
+  const [landingQueries, setLandingQueries] = React.useState<LandingQuery[]>([]);
   const [usersData, setUsersData] = React.useState<Tutor[]>([]);
   const [appToast, setAppToast] = React.useState<{ title: string; message: string; type: 'info' | 'warning' | 'success' } | null>(null);
   const [adminSettings, setAdminSettings] = React.useState<AdminSettingsData>(defaultAdminSettings(auth.currentUser?.displayName || 'Super Admin', auth.currentUser?.email || ''));
@@ -148,14 +149,13 @@ export default function App() {
     } catch (err) {
       console.error("❌ [ADMIN SYNC ERROR]", err);
     } finally {
-      if (isAuthenticated) setLoading(false);
+      setLoading(false);
     }
   }, [usersData, isAuthenticated]);
 
 
   React.useEffect(() => {
     if (!isAuthenticated) return;
-    setLoading(true);
     
     // 1. Unified Synchronization for all Tutors
     const unsubUsers = onSnapshot(query(collection(db, 'users'), where('role', 'in', ['tutor', 'Tutor'])), (snap) => {
@@ -167,7 +167,9 @@ export default function App() {
 
     // 2. Sync Students
     const unsubStudents = onSnapshot(query(collection(db, 'students')), (snap) => {
-      setStudents(snap.docs.map(d => ({ id: d.id, ...d.data() } as any)));
+      const allStudents = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+      // Filter out any users with admin role if they accidentally ended up in students collection
+      setStudents(allStudents.filter((s: any) => s.role !== 'admin' && s.role !== 'super-admin' && s.email !== 'admin@eduqra.com'));
     });
 
     // 3. Sync Bookings
@@ -211,6 +213,11 @@ export default function App() {
         });
 
         setNotifications(newNotifs);
+    });
+    
+    // 4.5 Sync Landing Page Queries
+    const unsubQueries = onSnapshot(query(collection(db, 'landing_queries'), orderBy('createdAt', 'desc')), (snap) => {
+      setLandingQueries(snap.docs.map(d => ({ id: d.id, ...d.data() } as LandingQuery)));
     });
 
     // 5. Sync admin settings
@@ -256,6 +263,7 @@ export default function App() {
       unsubStudents();
       unsubBookings();
       unsubNotifs();
+      unsubQueries();
       unsubSettings();
     };
   }, [isAuthenticated]);
@@ -536,7 +544,7 @@ export default function App() {
     const getPageContent = () => {
       switch (activePage) {
         case 'dashboard':
-          return <Dashboard tutors={tutors} students={students} bookings={bookings} payments={payments} setActivePage={setActivePage} />;
+          return <Dashboard tutors={tutors} students={students} bookings={bookings} payments={payments} landingQueries={landingQueries} setActivePage={setActivePage} />;
         case 'tutors':
           return <TutorsManagement 
             tutors={tutors} 
@@ -586,7 +594,7 @@ export default function App() {
             />
           );
         default:
-          return <Dashboard tutors={tutors} students={students} bookings={bookings} payments={payments} setActivePage={setActivePage} />;
+          return <Dashboard tutors={tutors} students={students} bookings={bookings} payments={payments} landingQueries={landingQueries} setActivePage={setActivePage} />;
       }
     };
 
@@ -597,7 +605,7 @@ export default function App() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -10 }}
-          transition={{ duration: 0.2, ease: 'easeOut' }}
+          transition={{ duration: 0.2, ease: 'easeOut' as const }}
         >
           {getPageContent()}
         </motion.div>

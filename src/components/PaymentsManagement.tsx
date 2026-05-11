@@ -12,7 +12,7 @@ import {
   Wallet,
   Banknote
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { Card, Badge, Button, Table, Modal } from './UI';
 import { Payment } from '../types';
 
@@ -47,7 +47,7 @@ export const PaymentsManagement = ({ payments, onMarkAsPaid }: PaymentsManagemen
       y: 0, 
       transition: {
         duration: 0.3,
-        ease: 'easeOut'
+        ease: 'easeOut' as const
       }
     },
   };
@@ -60,7 +60,7 @@ export const PaymentsManagement = ({ payments, onMarkAsPaid }: PaymentsManagemen
       y: 0, 
       filter: 'blur(0px)',
       transition: {
-        type: 'spring',
+        type: 'spring' as const,
         stiffness: 150,
         damping: 15
       }

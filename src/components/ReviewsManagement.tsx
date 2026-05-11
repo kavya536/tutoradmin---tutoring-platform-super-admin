@@ -11,7 +11,7 @@ import {
   ArrowLeft,
   Trash2
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { Card, Badge, Button } from './UI';
 import { Review } from '../types';
 import { cn } from '../lib/utils';
@@ -108,7 +108,7 @@ export const ReviewsManagement = ({ reviews, onDelete }: ReviewsManagementProps)
                   key={tutor.tutorName}
                   whileHover={{ y: -6 }}
                   whileTap={{ scale: 0.98 }}
-                  transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                  transition={{ type: "spring" as const, stiffness: 300, damping: 25 }}
                 >
                   <Card 
                     className="p-8 h-[340px] flex flex-col items-center text-center justify-between hover:shadow-2xl hover:shadow-primary/10 cursor-pointer border-gray-100 transition-all group bg-white"

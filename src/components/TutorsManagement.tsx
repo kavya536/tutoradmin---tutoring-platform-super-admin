@@ -26,9 +26,10 @@ import {
   AlertCircle,
   Eye,
   UserX,
-  RotateCcw
+  RotateCcw,
+  Clock
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { Card, Badge, Button, Tabs, Table, Modal } from './UI';
 import { Tutor, Student, Booking } from '../types';
@@ -45,6 +46,323 @@ interface TutorsManagementProps {
   onToggleBlock: (id: string, currentStatus: string) => void;
   initialSelectedTutorId?: string | null;
 }
+
+// 🔥 INTERNAL PDF RENDERER (Bypasses Google/Microsoft viewer errors)
+const PDFRenderer = ({ url, onLoading }: { url: string, onLoading: (loading: boolean) => void }) => {
+  const [numPages, setNumPages] = React.useState<number>(0);
+  const [pdf, setPdf] = React.useState<any>(null);
+  const [error, setError] = React.useState(false);
+
+  React.useEffect(() => {
+    let isMounted = true;
+    const loadPdf = async () => {
+      try {
+        onLoading(true);
+        if (!(window as any).pdfjsLib) {
+          const script = document.createElement('script');
+          script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+          document.head.appendChild(script);
+          await new Promise(resolve => script.onload = resolve);
+          (window as any).pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        }
+
+        if (url.includes('localhost')) {
+          setError(true);
+          onLoading(false);
+          return;
+        }
+
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`Failed to fetch PDF: ${response.status} ${response.statusText}`);
+        const data = await response.arrayBuffer();
+        
+        if (data.byteLength === 0) {
+          setError(true);
+          onLoading(false);
+          return;
+        }
+
+        const loadingTask = (window as any).pdfjsLib.getDocument({ data });
+        const pdfDoc = await loadingTask.promise;
+        if (isMounted) {
+          setPdf(pdfDoc);
+          setNumPages(pdfDoc.numPages);
+          onLoading(false);
+        }
+      } catch (err) {
+        console.error("PDF.js load error:", err);
+        if (isMounted) {
+          setError(true);
+          onLoading(false);
+        }
+      }
+    };
+    loadPdf();
+    return () => { isMounted = false; };
+  }, [url]);
+
+  if (error) return (
+    <div className="w-full h-full flex flex-col">
+      <div className="flex-1 min-h-[500px] relative bg-slate-50 rounded-xl overflow-hidden border border-gray-100 shadow-inner flex flex-col items-center justify-center p-10 text-center">
+        <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center text-rose-500 mb-4">
+          <AlertTriangle size={32} />
+        </div>
+        <h4 className="text-sm font-black text-gray-900 uppercase tracking-tight mb-2">Document Unreachable</h4>
+        <p className="text-xs text-gray-500 font-medium max-w-xs leading-relaxed">
+          The document link is invalid or the file is missing from the server. This often happens with older 'localhost' registrations.
+        </p>
+        
+        {url.includes('localhost') ? (
+           <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-2xl text-[10px] font-bold text-amber-800 text-left">
+             <p className="flex items-center gap-2 mb-1"><Info size={12}/> SYSTEM NOTE:</p>
+             This file is stored on the tutor's local machine and cannot be accessed from your dashboard.
+           </div>
+        ) : (
+          <iframe 
+            src={`${url}#toolbar=0&view=FitH`} 
+            className="w-full h-full border-none absolute inset-0"
+            title="PDF Fallback Viewer"
+          />
+        )}
+        <div className="absolute top-2 right-2 bg-amber-500 text-white text-[8px] font-black px-2 py-1 rounded-md shadow-lg flex items-center gap-1 uppercase tracking-widest">
+          <AlertCircle size={10} /> Browser Native View
+        </div>
+      </div>
+      <div className="p-4 text-center bg-gray-50/50 border-t border-gray-100">
+        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest"> custom renderer failed • displaying native preview instead </p>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          className="mt-2 rounded-xl text-[10px] font-bold h-8 px-4"
+          onClick={() => window.open(url, '_blank')}
+        >
+          <ExternalLink size={12} className="mr-2" />
+          Open Full Document in New Tab
+        </Button>
+      </div>
+    </div>
+  );
+  if (!pdf) return null;
+
+  return (
+    <div className="space-y-4">
+      {Array.from({ length: numPages }, (_, i) => (
+        <PDFPage key={i} pdf={pdf} pageNum={i + 1} />
+      ))}
+    </div>
+  );
+};
+
+const PDFPage = ({ pdf, pageNum }: { pdf: any, pageNum: number }) => {
+  const canvasRef = React.useRef<HTMLCanvasElement>(null);
+  
+  React.useEffect(() => {
+    const renderPage = async () => {
+      if (!canvasRef.current) return;
+      const page = await pdf.getPage(pageNum);
+      const viewport = page.getViewport({ scale: 1.5 });
+      const canvas = canvasRef.current;
+      const context = canvas.getContext('2d');
+      if (context) {
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+        await page.render({ canvasContext: context, viewport }).promise;
+      }
+    };
+    renderPage();
+  }, [pdf, pageNum]);
+
+  return (
+    <div className="relative group/page shadow-xl rounded-lg overflow-hidden bg-white border border-gray-100">
+      <div className="absolute top-2 left-2 z-10 bg-black/50 backdrop-blur-sm text-white text-[8px] font-bold px-2 py-0.5 rounded opacity-0 group-hover/page:opacity-100 transition-opacity">
+        Page {pageNum}
+      </div>
+      <canvas ref={canvasRef} className="w-full h-auto object-contain" />
+    </div>
+  );
+};
+
+// Helper Component for Verification Cards
+interface VerificationCardProps {
+  title: string;
+  subtitle: string;
+  icon: React.ReactNode;
+  url: string;
+  type: 'image' | 'pdf' | 'video';
+  onViewFull: (data: { url: string, title: string }) => void;
+}
+
+const VerificationCard = ({ title, subtitle, icon, url: initialUrl, type, onViewFull }: VerificationCardProps) => {
+  const [url, setUrl] = React.useState(initialUrl);
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState(false);
+
+  React.useEffect(() => {
+    const isLocalPath = typeof initialUrl === 'string' && initialUrl.startsWith('/');
+    const isFullUrl = typeof initialUrl === 'string' && initialUrl.startsWith('http');
+    
+    if (initialUrl && !isFullUrl && !isLocalPath && initialUrl.includes('/')) {
+      setLoading(true);
+      const storageRef = ref(storage, initialUrl);
+      getDownloadURL(storageRef)
+        .then((resolvedUrl) => {
+          setUrl(resolvedUrl);
+          setLoading(false);
+        })
+        .catch((err) => {
+          console.error("Failed to resolve storage path:", initialUrl, err);
+          setError(true);
+          setLoading(false);
+        });
+    } else {
+      setUrl(initialUrl);
+      setError(!initialUrl);
+      setLoading(false);
+    }
+  }, [initialUrl]);
+
+  const isPDF = typeof url === 'string' && (
+    type === 'pdf' || 
+    url.toLowerCase().includes('.pdf') || 
+    url.toLowerCase().includes('pdf') || 
+    (url.includes('firebasestorage') && !url.toLowerCase().includes('.jpg') && !url.toLowerCase().includes('.jpeg') && !url.toLowerCase().includes('.png') && !url.toLowerCase().includes('.webp') && !url.toLowerCase().includes('.gif'))
+  );
+
+  const [blobUrl, setBlobUrl] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    setBlobUrl(url);
+  }, [url]);
+
+  return (
+    <div className={cn(
+      "group bg-white rounded-3xl border border-gray-100 overflow-hidden transition-all duration-300",
+      url ? "hover:border-primary/30 hover:shadow-2xl hover:shadow-primary/5" : "opacity-60 bg-gray-50/50"
+    )}>
+      <div className="p-4 flex items-center justify-between border-b border-gray-50 text-left">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400 group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+            {icon}
+          </div>
+          <div className="text-left">
+            <h6 className="text-xs font-black text-gray-900 leading-tight">{title}</h6>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.05em]">{subtitle}</p>
+          </div>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          {url && (
+            <button 
+              onClick={() => {
+                onViewFull({ url: url, title: title });
+              }}
+              className="p-2 text-gray-400 hover:text-primary hover:bg-primary/5 rounded-xl transition-all border border-gray-100 shadow-sm"
+              title="View Full Document (All Pages)"
+            >
+              <ExternalLink size={16} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="p-4 h-56 flex items-center justify-center relative bg-gray-50/20">
+        {loading ? (
+          <div className="flex flex-col items-center gap-2">
+            <Loader2 className="w-8 h-8 text-primary animate-spin" />
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Resolving Link...</p>
+          </div>
+        ) : error || !url ? (
+          <div className="flex flex-col items-center gap-2 text-center p-6">
+            <AlertTriangle className="w-8 h-8 text-amber-400" />
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+              {error ? 'File Unreachable' : 'Document Not Provided'}
+            </p>
+            {initialUrl && (
+              <div className="mt-2 p-2 bg-white/50 rounded-lg border border-amber-100 select-all">
+                <p className="text-[8px] font-mono text-gray-400 break-all leading-relaxed">
+                  Raw Data: {initialUrl}
+                </p>
+              </div>
+            )}
+          </div>
+        ) : type === 'video' ? (
+          <div className="w-full h-full rounded-xl overflow-hidden bg-black">
+            <video 
+              src={url} 
+              className="w-full h-full object-contain"
+              controls
+              onError={() => setError(true)}
+            />
+          </div>
+        ) : isPDF ? (
+          <div className="w-full h-full flex flex-col pt-3">
+             <div className="flex justify-between items-center px-4 pb-2 border-b border-gray-100">
+                <div className="flex items-center gap-3">
+                  <Badge variant="info" className="text-[8px] py-0 h-4 bg-primary/5 text-primary border-primary/10 tracking-widest px-2 uppercase">Multi-page Doc</Badge>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button 
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 text-[10px] px-3 font-bold bg-primary/10 text-primary border-primary/20 hover:bg-primary/20"
+                    onClick={() => onViewFull({ url: blobUrl || url, title: title })}
+                  >
+                    <Eye size={12} className="mr-1" />
+                    View Document
+                  </Button>
+                </div>
+             </div>
+
+            <div className="w-full flex-1 bg-gray-900/5 overflow-y-auto p-4 space-y-4 custom-scrollbar scroll-smooth">
+              {(() => {
+                const isCloudinary = url.includes('cloudinary') && url.includes('/upload/');
+                if (isPDF && !isCloudinary) {
+                  return <PDFRenderer url={url} onLoading={setLoading} />;
+                }
+                return [1, 2, 3, 4, 5].map((page) => (
+                  <div key={page} className="relative group/page shadow-xl rounded-lg overflow-hidden bg-white">
+                    <div className="absolute top-2 left-2 z-10 bg-black/50 backdrop-blur-sm text-white text-[8px] font-bold px-2 py-0.5 rounded opacity-0 group-hover/page:opacity-100 transition-opacity">
+                      Page {page}
+                    </div>
+                    <img 
+                      src={url.includes('cloudinary') && url.includes('/upload/')
+                        ? url.replace('/upload/', `/upload/pg_${page},q_auto,f_auto/`).replace(/\.pdf$/i, '.jpg')
+                        : url
+                      }
+                      alt={`Document Page ${page}`} 
+                      className="w-full h-auto object-contain transition-transform duration-500 hover:scale-[1.01]"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).closest('.relative')?.remove();
+                      }}
+                    />
+                  </div>
+                ));
+              })()}
+              
+              <div className="py-8 text-center">
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">• End of Document •</p>
+              </div>
+            </div>
+            
+            <div className="p-2 px-4 bg-white border-t border-gray-100 flex justify-end items-center">
+               <span className="text-[9px] font-black text-primary/10 uppercase tracking-tighter">Verified Link</span>
+            </div>
+          </div>
+        ) : (
+          <div className="relative w-full h-full cursor-zoom-in group-hover:scale-[1.02] transition-transform duration-500">
+            <img 
+              src={url} 
+              alt={title} 
+              className="w-full h-full object-contain rounded-xl"
+              onClick={() => window.open(url, '_blank')}
+              onError={() => setError(true)}
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 export const TutorsManagement = ({ 
   tutors, 
@@ -63,6 +381,7 @@ export const TutorsManagement = ({
   const [rejectionModal, setRejectionModal] = React.useState<{ isOpen: boolean, tutorId: string }>({ isOpen: false, tutorId: '' });
   const [rejectionReason, setRejectionReason] = React.useState('');
   const [openMenuId, setOpenMenuId] = React.useState<string | null>(null);
+  const [modalTab, setModalTab] = React.useState<'profile' | 'history'>('profile');
   const [isLoading, setIsLoading] = React.useState(false);
   const [fullViewDoc, setFullViewDoc] = React.useState<{ url: string, title: string } | null>(null);
 
@@ -227,8 +546,8 @@ export const TutorsManagement = ({
                   <div className="flex flex-col gap-2">
                     <div className="flex flex-wrap gap-1.5">
                       {Array.isArray(tutor.subjects) && tutor.subjects.length > 0 ? (
-                        tutor.subjects.slice(0, 2).map(s => (
-                          <span key={s} className="px-2 py-0.5 bg-primary/5 text-primary text-[10px] font-black rounded-md uppercase tracking-tight border border-primary/10">{s}</span>
+                        tutor.subjects.slice(0, 2).map((s, idx) => (
+                          <span key={`${s}-${idx}`} className="px-2 py-0.5 bg-primary/5 text-primary text-[10px] font-black rounded-md uppercase tracking-tight border border-primary/10">{s}</span>
                         ))
                       ) : typeof tutor.subjects === 'string' ? (
                         <span className="px-2 py-0.5 bg-primary/5 text-primary text-[10px] font-black rounded-md uppercase tracking-tight border border-primary/10">{tutor.subjects}</span>
@@ -376,11 +695,29 @@ export const TutorsManagement = ({
       {/* Profile Modal */}
       <Modal 
         isOpen={!!selectedTutorId} 
-        onClose={() => setSelectedTutorId(null)} 
-        title="Tutor Profile Overview"
+        onClose={() => { setSelectedTutorId(null); setModalTab('profile'); }} 
+        title={`${selectedTutor?.name || 'Tutor'} Profile & History`}
       >
         {selectedTutor && (
           <div className="space-y-8 pb-4">
+            {/* Tab Navigation */}
+            <div className="flex border-b border-gray-100 mb-6">
+              <button 
+                onClick={() => setModalTab('profile')}
+                className={`px-6 py-3 text-sm font-black uppercase tracking-widest transition-all border-b-2 ${modalTab === 'profile' ? 'border-primary text-primary' : 'border-transparent text-gray-400'}`}
+              >
+                Profile Overview
+              </button>
+              <button 
+                onClick={() => setModalTab('history')}
+                className={`px-6 py-3 text-sm font-black uppercase tracking-widest transition-all border-b-2 ${modalTab === 'history' ? 'border-primary text-primary' : 'border-transparent text-gray-400'}`}
+              >
+                Student Ledger & History
+              </button>
+            </div>
+
+            {modalTab === 'profile' ? (
+              <>
             {/* Header Info */}
             <div className="flex items-start justify-between bg-gray-50/50 p-6 rounded-3xl border border-gray-100">
               <div className="flex items-center space-x-6">
@@ -688,8 +1025,114 @@ export const TutorsManagement = ({
                 )}
               </div>
             </div>
+          </>
+        ) : (
+              <div className="space-y-6">
+                {/* Stats & UPI */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                   <div className="bg-primary/5 rounded-2xl p-5 border border-primary/10">
+                    <p className="text-[10px] font-black text-primary/60 uppercase tracking-widest mb-1">Tutor UPI ID</p>
+                    <p className="text-sm font-black text-primary font-mono">{selectedTutor.upiId || 'Not provided'}</p>
+                    <p className="text-[9px] text-primary/40 font-bold mt-1">For payout processing</p>
+                  </div>
+                  <div className="bg-emerald-50 rounded-2xl p-5 border border-emerald-100">
+                    <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Total Students</p>
+                    <p className="text-3xl font-black text-emerald-900">
+                      {new Set(bookings.filter(b => b.tutorId === selectedTutor.id).map(b => b.studentId)).size}
+                    </p>
+                  </div>
+                  <div className="bg-slate-50 rounded-2xl p-5 border border-slate-100">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Payouts Done</p>
+                    <p className="text-3xl font-black text-slate-900">
+                      {bookings.filter(b => b.tutorId === selectedTutor.id && (b as any).tutorPayoutStatus === 'paid').length}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Student History Table */}
+                <div className="bg-white border border-gray-100 rounded-3xl overflow-hidden shadow-sm">
+                   <div className="p-6 border-b border-gray-50">
+                     <h5 className="text-xs font-black text-gray-900 uppercase tracking-widest">Active Students & Booking Records</h5>
+                   </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                      <thead className="bg-gray-50/50 border-b border-gray-100">
+                        <tr>
+                          <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Student Name</th>
+                          <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Subject & Plan</th>
+                          <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Timings (Start-End)</th>
+                          <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Amount & Status</th>
+                          <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Payout</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {bookings
+                          .filter(b => b.tutorId === selectedTutor.id)
+                          .map((b: any) => (
+                          <tr key={b.id} className="hover:bg-gray-50/50 transition-colors">
+                            <td className="px-6 py-4">
+                              <p className="text-sm font-black text-gray-900">{b.studentName}</p>
+                              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{b.studentEmail || 'Verified student'}</p>
+                            </td>
+                            <td className="px-6 py-4">
+                               <div className="space-y-1">
+                                 <p className="text-xs font-bold text-gray-700">{b.subject}</p>
+                                 <Badge variant="default" className="text-[8px] py-0">{b.planName || b.studentType || 'General'}</Badge>
+                               </div>
+                            </td>
+                            <td className="px-6 py-4">
+                               <div className="space-y-1 text-gray-500">
+                                 <p className="text-[10px] font-bold flex items-center gap-1.5 uppercase">
+                                   <Calendar size={10} className="text-primary" /> {b.date || b.dateTime?.split(' ')[0]}
+                                 </p>
+                                 <p className="text-[9px] font-black flex items-center gap-1.5 uppercase tracking-tighter">
+                                   <Clock size={10} className="text-primary" /> {b.startTime || b.time} - {b.endTime || 'N/A'}
+                                 </p>
+                               </div>
+                            </td>
+                            <td className="px-6 py-4">
+                               <div className="space-y-1">
+                                 <p className="text-sm font-black text-gray-900">₹{b.amount || 0}</p>
+                                 <Badge variant={b.status === 'confirmed' || b.status === 'completed' ? 'success' : b.status === 'pending_cancellation' ? 'warning' : 'danger'}>
+                                   {b.status === 'pending_cancellation' ? 'CLASS CANCEL REQUEST' : b.status}
+                                 </Badge>
+                                 {b.status === 'pending_cancellation' && (
+                                   <div className="mt-2 p-2 bg-rose-50 rounded-lg border border-rose-100">
+                                     <p className="text-[7px] font-black text-rose-600 uppercase tracking-tighter leading-none">Reason: {b.cancellationReason}</p>
+                                     <p className="text-[6px] font-bold text-gray-400 uppercase mt-1">Rebooked: {b.bookedAnotherTutor ? 'Yes' : 'No'}</p>
+                                   </div>
+                                 )}
+                                 {b.status === 'cancelled' && (
+                                    <p className="text-[8px] font-black text-rose-500 uppercase mt-1">Refund: {b.refundStatus || 'Pending'}</p>
+                                 )}
+                               </div>
+                            </td>
+                            <td className="px-6 py-4">
+                               <div className="flex flex-col items-center gap-1.5">
+                                 <Badge variant={b.tutorPayoutStatus === 'paid' ? 'success' : 'warning'}>
+                                   {b.tutorPayoutStatus || 'pending'}
+                                 </Badge>
+                                 {b.tutorPayoutDate && (
+                                   <span className="text-[8px] text-gray-400 font-bold uppercase">{new Date(b.tutorPayoutDate).toLocaleDateString()}</span>
+                                 )}
+                               </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {bookings.filter(b => b.tutorId === selectedTutor.id).length === 0 && (
+                    <div className="p-20 text-center text-gray-300">
+                       <p className="text-sm font-bold uppercase tracking-[0.2em]">No teaching records found</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
-        )}
+        )
+      }
       </Modal>
 
       {/* Verification Modal (CORE FEATURE) */}
@@ -917,325 +1360,4 @@ export const TutorsManagement = ({
   );
 };
 
-// 🔥 INTERNAL PDF RENDERER (Bypasses Google/Microsoft viewer errors)
-const PDFRenderer = ({ url, onLoading }: { url: string, onLoading: (loading: boolean) => void }) => {
-  const [numPages, setNumPages] = React.useState<number>(0);
-  const [pdf, setPdf] = React.useState<any>(null);
-  const [error, setError] = React.useState(false);
 
-  React.useEffect(() => {
-    let isMounted = true;
-    const loadPdf = async () => {
-      try {
-        onLoading(true);
-        // Dynamically load PDF.js if not present
-        if (!(window as any).pdfjsLib) {
-          const script = document.createElement('script');
-          script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
-          document.head.appendChild(script);
-          await new Promise(resolve => script.onload = resolve);
-          (window as any).pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-        }
-
-        // 🚨 PREVENT CONSOLE ERRORS: Do not fetch localhost URLs
-        if (url.includes('localhost')) {
-          setError(true);
-          onLoading(false);
-          return;
-        }
-
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`Failed to fetch PDF: ${response.status} ${response.statusText}`);
-        const data = await response.arrayBuffer();
-        
-        if (data.byteLength === 0) {
-          setError(true);
-          onLoading(false);
-          return;
-        }
-
-        const loadingTask = (window as any).pdfjsLib.getDocument({ data });
-        const pdfDoc = await loadingTask.promise;
-        if (isMounted) {
-          setPdf(pdfDoc);
-          setNumPages(pdfDoc.numPages);
-          onLoading(false);
-        }
-      } catch (err) {
-        console.error("PDF.js load error:", err);
-        if (isMounted) {
-          setError(true);
-          onLoading(false);
-        }
-      }
-    };
-    loadPdf();
-    return () => { isMounted = false; };
-  }, [url]);
-
-  if (error) return (
-    <div className="w-full h-full flex flex-col">
-      <div className="flex-1 min-h-[500px] relative bg-slate-50 rounded-xl overflow-hidden border border-gray-100 shadow-inner flex flex-col items-center justify-center p-10 text-center">
-        <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center text-rose-500 mb-4">
-          <AlertTriangle size={32} />
-        </div>
-        <h4 className="text-sm font-black text-gray-900 uppercase tracking-tight mb-2">Document Unreachable</h4>
-        <p className="text-xs text-gray-500 font-medium max-w-xs leading-relaxed">
-          The document link is invalid or the file is missing from the server. This often happens with older 'localhost' registrations.
-        </p>
-        
-        {url.includes('localhost') ? (
-           <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-2xl text-[10px] font-bold text-amber-800 text-left">
-             <p className="flex items-center gap-2 mb-1"><Info size={12}/> SYSTEM NOTE:</p>
-             This file is stored on the tutor's local machine and cannot be accessed from your dashboard.
-           </div>
-        ) : (
-          <iframe 
-            src={`${url}#toolbar=0&view=FitH`} 
-            className="w-full h-full border-none absolute inset-0"
-            title="PDF Fallback Viewer"
-          />
-        )}
-        <div className="absolute top-2 right-2 bg-amber-500 text-white text-[8px] font-black px-2 py-1 rounded-md shadow-lg flex items-center gap-1 uppercase tracking-widest">
-          <AlertCircle size={10} /> Browser Native View
-        </div>
-      </div>
-      <div className="p-4 text-center bg-gray-50/50 border-t border-gray-100">
-        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest"> custom renderer failed • displaying native preview instead </p>
-        <Button 
-          variant="outline" 
-          size="sm" 
-          className="mt-2 rounded-xl text-[10px] font-bold h-8 px-4"
-          onClick={() => window.open(url, '_blank')}
-        >
-          <ExternalLink size={12} className="mr-2" />
-          Open Full Document in New Tab
-        </Button>
-      </div>
-    </div>
-  );
-  if (!pdf) return null;
-
-  return (
-    <div className="space-y-4">
-      {Array.from({ length: numPages }, (_, i) => (
-        <PDFPage key={i} pdf={pdf} pageNum={i + 1} />
-      ))}
-    </div>
-  );
-};
-
-const PDFPage = ({ pdf, pageNum }: { pdf: any, pageNum: number }) => {
-  const canvasRef = React.useRef<HTMLCanvasElement>(null);
-  
-  React.useEffect(() => {
-    const renderPage = async () => {
-      if (!canvasRef.current) return;
-      const page = await pdf.getPage(pageNum);
-      const viewport = page.getViewport({ scale: 1.5 });
-      const canvas = canvasRef.current;
-      const context = canvas.getContext('2d');
-      if (context) {
-        canvas.height = viewport.height;
-        canvas.width = viewport.width;
-        await page.render({ canvasContext: context, viewport }).promise;
-      }
-    };
-    renderPage();
-  }, [pdf, pageNum]);
-
-  return (
-    <div className="relative group/page shadow-xl rounded-lg overflow-hidden bg-white border border-gray-100">
-      <div className="absolute top-2 left-2 z-10 bg-black/50 backdrop-blur-sm text-white text-[8px] font-bold px-2 py-0.5 rounded opacity-0 group-hover/page:opacity-100 transition-opacity">
-        Page {pageNum}
-      </div>
-      <canvas ref={canvasRef} className="w-full h-auto object-contain" />
-    </div>
-  );
-};
-
-// Helper Component for Verification Cards
-interface VerificationCardProps {
-  title: string;
-  subtitle: string;
-  icon: React.ReactNode;
-  url: string;
-  type: 'image' | 'pdf' | 'video';
-  onViewFull: (data: { url: string, title: string }) => void;
-}
-
-const VerificationCard = ({ title, subtitle, icon, url: initialUrl, type, onViewFull }: VerificationCardProps) => {
-  const [url, setUrl] = React.useState(initialUrl);
-  const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState(false);
-
-  React.useEffect(() => {
-    // ONLY resolve from Firebase Storage if it's NOT a full URL and looks like a storage path
-    // Local paths (starting with /uploads) or full http URLs should be used directly
-    const isLocalPath = typeof initialUrl === 'string' && initialUrl.startsWith('/');
-    const isFullUrl = typeof initialUrl === 'string' && initialUrl.startsWith('http');
-    
-    if (initialUrl && !isFullUrl && !isLocalPath && initialUrl.includes('/')) {
-      setLoading(true);
-      const storageRef = ref(storage, initialUrl);
-      getDownloadURL(storageRef)
-        .then((resolvedUrl) => {
-          setUrl(resolvedUrl);
-          setLoading(false);
-        })
-        .catch((err) => {
-          console.error("Failed to resolve storage path:", initialUrl, err);
-          setError(true);
-          setLoading(false);
-        });
-    } else {
-      setUrl(initialUrl);
-      setError(!initialUrl);
-      setLoading(false);
-    }
-  }, [initialUrl]);
-
-  const isPDF = typeof url === 'string' && (
-    type === 'pdf' || 
-    url.toLowerCase().includes('.pdf') || 
-    url.toLowerCase().includes('pdf') || 
-    (url.includes('firebasestorage') && !url.toLowerCase().includes('.jpg') && !url.toLowerCase().includes('.jpeg') && !url.toLowerCase().includes('.png') && !url.toLowerCase().includes('.webp') && !url.toLowerCase().includes('.gif'))
-  );
-
-  // Simplified URL sync to avoid fetch/CORS issues
-  const [blobUrl, setBlobUrl] = React.useState<string | null>(null);
-
-  React.useEffect(() => {
-    setBlobUrl(url);
-  }, [url]);
-
-  return (
-    <div className={cn(
-      "group bg-white rounded-3xl border border-gray-100 overflow-hidden transition-all duration-300",
-      url ? "hover:border-primary/30 hover:shadow-2xl hover:shadow-primary/5" : "opacity-60 bg-gray-50/50"
-    )}>
-      <div className="p-4 flex items-center justify-between border-b border-gray-50 text-left">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400 group-hover:bg-primary/10 group-hover:text-primary transition-colors">
-            {icon}
-          </div>
-          <div className="text-left">
-            <h6 className="text-xs font-black text-gray-900 leading-tight">{title}</h6>
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.05em]">{subtitle}</p>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-2">
-          {url && (
-            <button 
-              onClick={() => {
-                onViewFull({ url: url, title: title });
-              }}
-              className="p-2 text-gray-400 hover:text-primary hover:bg-primary/5 rounded-xl transition-all border border-gray-100 shadow-sm"
-              title="View Full Document (All Pages)"
-            >
-              <ExternalLink size={16} />
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div className="p-4 h-56 flex items-center justify-center relative bg-gray-50/20">
-        {loading ? (
-          <div className="flex flex-col items-center gap-2">
-            <Loader2 className="w-8 h-8 text-primary animate-spin" />
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Resolving Link...</p>
-          </div>
-        ) : error || !url ? (
-          <div className="flex flex-col items-center gap-2 text-center p-6">
-            <AlertTriangle className="w-8 h-8 text-amber-400" />
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-              {error ? 'File Unreachable' : 'Document Not Provided'}
-            </p>
-            {initialUrl && (
-              <div className="mt-2 p-2 bg-white/50 rounded-lg border border-amber-100 select-all">
-                <p className="text-[8px] font-mono text-gray-400 break-all leading-relaxed">
-                  Raw Data: {initialUrl}
-                </p>
-              </div>
-            )}
-          </div>
-        ) : type === 'video' ? (
-          <div className="w-full h-full rounded-xl overflow-hidden bg-black">
-            <video 
-              src={url} 
-              className="w-full h-full object-contain"
-              controls
-              onError={() => setError(true)}
-            />
-          </div>
-        ) : isPDF ? (
-          <div className="w-full h-full flex flex-col pt-3">
-             <div className="flex justify-between items-center px-4 pb-2 border-b border-gray-100">
-                <div className="flex items-center gap-3">
-                  <Badge variant="info" className="text-[8px] py-0 h-4 bg-primary/5 text-primary border-primary/10 tracking-widest px-2 uppercase">Multi-page Doc</Badge>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button 
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 text-[10px] px-3 font-bold bg-primary/10 text-primary border-primary/20 hover:bg-primary/20"
-                    onClick={() => onViewFull({ url: blobUrl || url, title: title })}
-                  >
-                    <Eye size={12} className="mr-1" />
-                    View Document
-                  </Button>
-                </div>
-             </div>
-
-            <div className="w-full flex-1 bg-gray-900/5 overflow-y-auto p-4 space-y-4 custom-scrollbar scroll-smooth">
-              {(() => {
-                const isCloudinary = url.includes('cloudinary') && url.includes('/upload/');
-                if (isPDF && !isCloudinary) {
-                  return <PDFRenderer url={url} onLoading={setLoading} />;
-                }
-                return [1, 2, 3, 4, 5].map((page) => (
-                  <div key={page} className="relative group/page shadow-xl rounded-lg overflow-hidden bg-white">
-                    <div className="absolute top-2 left-2 z-10 bg-black/50 backdrop-blur-sm text-white text-[8px] font-bold px-2 py-0.5 rounded opacity-0 group-hover/page:opacity-100 transition-opacity">
-                      Page {page}
-                    </div>
-                    <img 
-                      src={url.includes('cloudinary') && url.includes('/upload/')
-                        ? url.replace('/upload/', `/upload/pg_${page},q_auto,f_auto/`).replace(/\.pdf$/i, '.jpg')
-                        : url
-                      }
-                      alt={`Document Page ${page}`} 
-                      className="w-full h-auto object-contain transition-transform duration-500 hover:scale-[1.01]"
-                      onError={(e) => {
-                        // Hide the image if the page doesn't exist (e.g. page 4 of a 3-page doc)
-                        (e.target as HTMLImageElement).closest('.relative')?.remove();
-                      }}
-                    />
-                  </div>
-                ));
-              })()}
-              
-              <div className="py-8 text-center">
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">• End of Document •</p>
-              </div>
-            </div>
-            
-            <div className="p-2 px-4 bg-white border-t border-gray-100 flex justify-end items-center">
-               <span className="text-[9px] font-black text-primary/10 uppercase tracking-tighter">Verified Link</span>
-            </div>
-          </div>
-        ) : (
-          <div className="relative w-full h-full cursor-zoom-in group-hover:scale-[1.02] transition-transform duration-500">
-            <img 
-              src={url} 
-              alt={title} 
-              className="w-full h-full object-contain rounded-xl"
-              onClick={() => window.open(url, '_blank')}
-              onError={() => setError(true)}
-            />
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};

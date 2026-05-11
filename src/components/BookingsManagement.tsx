@@ -13,10 +13,10 @@ import {
   CheckCircle2,
   XCircle
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { Card, Badge, Button, Tabs, Table, Modal } from './UI';
-import { Booking } from '../types';
-import { doc, updateDoc, serverTimestamp, getDoc, increment, query, collection, where, getDocs, addDoc } from 'firebase/firestore';
+import { Booking, Student } from '../types';
+import { doc, updateDoc, serverTimestamp, getDoc, increment, query, collection, where, getDocs, addDoc, arrayUnion } from 'firebase/firestore';
 import { db } from '../firebase';
 
 interface BookingsManagementProps {
@@ -99,12 +99,12 @@ export const BookingsManagement = ({ bookings }: BookingsManagementProps) => {
   const [searchQuery, setSearchQuery] = React.useState('');
   const [selectedBooking, setSelectedBooking] = React.useState<Booking | null>(null);
   const [isProcessing, setIsProcessing] = React.useState(false);
+  const [rejectionReason, setRejectionReason] = React.useState('');
+  const [showRejectionForm, setShowRejectionForm] = React.useState(false);
 
   const filteredBookings = bookings.filter(b => {
     let matchesTab = true;
-    if (activeTab === 'Cancellations') {
-      matchesTab = b.status === 'pending_cancellation';
-    } else if (activeTab !== 'All') {
+    if (activeTab !== 'All') {
       matchesTab = b.status === activeTab.toLowerCase();
     }
     
@@ -113,115 +113,135 @@ export const BookingsManagement = ({ bookings }: BookingsManagementProps) => {
     return matchesTab && matchesSearch;
   });
 
-  const tabs = ['All', 'Pending', 'Confirmed', 'Cancelled', 'Cancellations'];
+  const tabs = ['All', 'Pending', 'Confirmed', 'Cancelled'];
 
-  const calculateRefund = (booking: Booking) => {
+  const calculateRefund = (booking: Booking, student?: Student) => {
     if (!booking.amount) return { eligible: false, refundAmount: 0, reason: "No payment found" };
 
-    const platformFeeRate = 0.17;
-    const totalAmount = booking.amount;
-    const platformFee = totalAmount * platformFeeRate;
-    const originalAmount = totalAmount - platformFee;
+    const totalPaidAmount = booking.amount;
     
-    const paidAt = (booking as any).paidAt?.toDate ? (booking as any).paidAt.toDate() : (booking.paidAt ? new Date(booking.paidAt) : null);
-    if (!paidAt) return { eligible: false, refundAmount: 0, reason: "Payment date unknown" };
+    // Get tier - prioritize tierAtBooking if saved, else fallback to student subscription tier
+    const tier = (booking as any).tierAtBooking || 
+                 student?.subscription?.tier || 
+                 ((booking as any).plan?.toLowerCase().includes('premium') ? 'premium' : 
+                  (booking as any).plan?.toLowerCase().includes('standard') ? 'standard' : 'free');
+    
+    // Get plan dates - fallback to enrollment dates or registration
+    const startDate = student?.subscription?.startDate?.toDate ? student.subscription.startDate.toDate() : (student?.subscription?.startDate ? new Date(student.subscription.startDate) : (booking as any).paidAt?.toDate ? (booking as any).paidAt.toDate() : (booking.paidAt ? new Date(booking.paidAt) : null));
+    const endDate = student?.subscription?.expiresAt?.toDate ? student.subscription.expiresAt.toDate() : (student?.subscription?.expiresAt ? new Date(student.subscription.expiresAt) : null);
+    
+    if (!startDate || !endDate) return { eligible: false, refundAmount: 0, reason: "Plan duration unknown" };
 
     const now = new Date();
-    const diffTime = Math.abs(now.getTime() - paidAt.getTime());
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    const totalDurationMs = endDate.getTime() - startDate.getTime();
+    const totalDurationDays = Math.ceil(totalDurationMs / (1000 * 60 * 60 * 24)) || 30;
+    
+    const timeSinceStartMs = now.getTime() - startDate.getTime();
+    const daysSinceStart = Math.ceil(timeSinceStartMs / (1000 * 60 * 60 * 24));
+    
+    const timeUntilEndMs = endDate.getTime() - now.getTime();
+    const daysUntilEnd = Math.ceil(timeUntilEndMs / (1000 * 60 * 60 * 24));
 
-    const tier = (booking as any).tierAtBooking || (booking as any).plan?.includes('premium') ? 'premium' : (booking as any).plan?.includes('standard') ? 'standard' : 'free';
     const attendedClasses = (booking as any).attendedCount || 0;
 
-    let eligible = false;
-    let refundAmount = 0;
-    let reason = "";
-
-    if (tier === 'free') {
-      if (diffDays <= 3) {
-        eligible = true;
-        refundAmount = originalAmount;
-        reason = "Within 3-day window";
-      } else {
-        eligible = false;
-        reason = "3-day window expired";
-      }
-    } else {
-      if (diffDays <= 3 && attendedClasses <= 3) {
-        const totalDays = parseFloat(booking.duration || '1') * 30;
-        const completedDaysCost = originalAmount * (attendedClasses / totalDays);
-        const deduction = totalAmount * 0.03;
-        refundAmount = totalAmount - completedDaysCost - deduction;
-        eligible = refundAmount > 0;
-        reason = "Early Cancellation (≤3 days)";
-      } else {
-        const totalDurationDays = 90;
-        const daysLeft = totalDurationDays - diffDays;
-        if (daysLeft > 10) {
-          const refundPercent = tier === 'premium' ? 0.40 : 0.20;
-          refundAmount = originalAmount * refundPercent;
-          eligible = true;
-          reason = `Flat ${refundPercent * 100}% Refund`;
-        } else {
-          eligible = false;
-          reason = "Last 10 days of plan";
-        }
-      }
+    // 1. Last 10 Days Rule
+    if (daysUntilEnd <= 10) {
+      return { 
+        eligible: false, 
+        refundAmount: 0, 
+        reason: "No refund in last 10 days",
+        details: `Plan ends in ${daysUntilEnd} days.`
+      };
     }
 
-    return { 
-      eligible: eligible && refundAmount > 0, 
-      refundAmount: Math.max(0, Math.floor(refundAmount)),
-      reason,
-      breakdown: { platformFee: Math.floor(platformFee), originalAmount: Math.floor(originalAmount), diffDays, tier, attendedClasses }
+    // 2. Initial 3-day/3-class window
+    if (daysSinceStart <= 3 && attendedClasses <= 3) {
+      const dailyRate = totalPaidAmount / totalDurationDays;
+      const attendedCharges = dailyRate * Math.max(daysSinceStart, attendedClasses);
+      const platformFee = totalPaidAmount * 0.04;
+      const refundAmount = totalPaidAmount - attendedCharges - platformFee;
+      
+      return { 
+        eligible: refundAmount > 0, 
+        refundAmount: Math.max(0, Math.floor(refundAmount)), 
+        reason: "Initial 3-day Window Refund",
+        details: "Deductions: Attended classes + 4% platform fee.",
+        breakdown: {
+          totalPaidAmount,
+          attendedCharges: Math.floor(attendedCharges),
+          platformFee: Math.floor(platformFee),
+          daysSinceStart,
+          attendedClasses
+        }
+      };
+    }
+
+    // 3. After 3 days, before last 10 days
+    if (tier === 'free') {
+      return { eligible: false, refundAmount: 0, reason: "Free Plan: Non-refundable" };
+    }
+
+    const refundPercent = tier === 'premium' ? 0.40 : 0.20;
+    const refundAmount = totalPaidAmount * refundPercent;
+
+    return {
+      eligible: true,
+      refundAmount: Math.floor(refundAmount),
+      reason: `${tier.toUpperCase()} Plan: Partial Refund`,
+      details: `${refundPercent * 100}% of total amount. Deductions applied.`,
+      breakdown: {
+        totalPaidAmount,
+        refundPercent: refundPercent * 100,
+        daysSinceStart,
+        daysUntilEnd
+      }
     };
   };
+
+
+
+
+
 
   const handleUpdateStatus = async (id: string, newStatus: string) => {
     setIsProcessing(true);
     try {
       const bookingRef = doc(db, 'bookings', id);
-      const bookingSnap = await getDoc(bookingRef);
-      const bookingData = bookingSnap.data() as Booking;
-
       await updateDoc(bookingRef, { 
         status: newStatus,
         adminResolutionAt: serverTimestamp()
       });
-
-      // Handle Wallet Refund if approved and student wants to re-book
-      if (newStatus === 'cancelled' && (bookingData as any).wantsNewTutor) {
-        const refund = calculateRefund(bookingData);
-        if (refund.eligible && refund.refundAmount > 0) {
-          const studentEmail = bookingData.studentEmail;
-          if (studentEmail) {
-            // Find student by email
-            const studentQuery = query(collection(db, 'students'), where('email', '==', studentEmail));
-            const studentSnap = await getDocs(studentQuery);
-            if (!studentSnap.empty) {
-              const studentDoc = studentSnap.docs[0];
-              await updateDoc(doc(db, 'students', studentDoc.id), {
-                walletBalance: increment(refund.refundAmount)
-              });
-
-              // Notify student
-              await addDoc(collection(db, 'notifications'), {
-                userId: studentDoc.id,
-                type: 'update',
-                title: 'Refund Credited to Wallet',
-                message: `₹${refund.refundAmount} has been credited to your wallet for future bookings.`,
-                time: new Date().toISOString(),
-                read: false
-              });
-            }
-          }
-        }
-      }
-
       setSelectedBooking(null);
     } catch (err) {
-      console.error("Failed to update booking status:", err);
+      console.error(err);
       alert("Failed to update status.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+
+
+
+  const handleMarkRefundPaid = async (id: string) => {
+    setIsProcessing(true);
+    try {
+      const bookingRef = doc(db, 'bookings', id);
+      await updateDoc(bookingRef, {
+        refundStatus: 'completed',
+        refundPaidAt: serverTimestamp(),
+        transactionLedger: arrayUnion({
+          amount: 0,
+          type: 'manual_refund_paid',
+          date: new Date().toLocaleDateString(),
+          time: new Date().toLocaleTimeString(),
+          status: 'completed'
+        })
+      });
+      setSelectedBooking(null);
+    } catch (err) {
+      console.error("Failed to mark refund as paid:", err);
+      alert("Failed to update refund status.");
     } finally {
       setIsProcessing(false);
     }
@@ -247,13 +267,9 @@ export const BookingsManagement = ({ bookings }: BookingsManagementProps) => {
         <div>
           <h2 className="text-3xl font-black text-gray-900 tracking-tight flex items-center gap-3">
             Bookings Management
-            {bookings.filter(b => b.status === 'pending_cancellation').length > 0 && (
-              <span className="px-3 py-1 bg-rose-50 text-rose-600 text-[10px] font-black rounded-full border border-rose-100 flex items-center gap-2 animate-pulse">
-                <RefreshCw size={10} className="animate-spin-slow" /> {bookings.filter(b => b.status === 'pending_cancellation').length} Requests
-              </span>
-            )}
+
           </h2>
-          <p className="text-gray-500 font-medium">Monitor tutoring sessions and handle cancellation/refund requests.</p>
+          <p className="text-gray-500 font-medium">Monitor tutoring sessions and handle booking updates.</p>
         </div>
         <div className="flex items-center space-x-3">
           <div className="relative">
@@ -325,6 +341,11 @@ export const BookingsManagement = ({ bookings }: BookingsManagementProps) => {
                     <Clock size={12} />
                     {booking.dateTime ? booking.dateTime.split(' ')[1] : (booking.time || '')}
                   </span>
+                  <div className="mt-2">
+                    <span className={`text-[8px] font-black px-2 py-0.5 rounded-full border uppercase tracking-tighter ${booking.studentType === 'demo' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
+                      {booking.studentType === 'demo' ? 'Demo Class' : 'Regular Course'}
+                    </span>
+                  </div>
                 </div>
               </td>
               <td className="px-4 sm:px-6 py-4">
@@ -332,12 +353,11 @@ export const BookingsManagement = ({ bookings }: BookingsManagementProps) => {
                   variant={
                     booking.status === 'confirmed' ? 'success' : 
                     booking.status === 'pending' ? 'warning' : 
-                    booking.status === 'pending_cancellation' ? 'warning' :
+                    ['approved_cancellation', 'refund_completed'].includes(booking.status) ? 'success' :
                     'danger'
                   }
-                  className={booking.status === 'pending_cancellation' ? 'animate-pulse bg-rose-50 text-rose-600 border-rose-100' : ''}
                 >
-                  {booking.status === 'pending_cancellation' ? 'Cancel Requested' : booking.status}
+                  {booking.status.replace('_', ' ').toUpperCase()}
                 </Badge>
               </td>
             </motion.tr>
@@ -411,111 +431,68 @@ export const BookingsManagement = ({ bookings }: BookingsManagementProps) => {
                 </div>
               </div>
             </div>
-
-            {/* Cancellation Review Section */}
-            {selectedBooking.status === 'pending_cancellation' && (
-              <div className="bg-rose-50 rounded-[2rem] p-8 border border-rose-100 relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-24 h-24 bg-rose-200/20 rounded-full -mr-12 -mt-12" />
-                
-                <div className="relative z-10">
-                  <div className="flex items-center gap-3 mb-6">
-                    <div className="p-2 bg-rose-100 rounded-xl text-rose-600">
-                      <AlertTriangle size={20} />
-                    </div>
-                    <h4 className="text-lg font-black text-rose-900">Refund Review Required</h4>
+            
+            {['pending_cancellation', 'approved_cancellation', 'refund_completed'].includes(selectedBooking.status) && (
+              <div className="p-6 bg-rose-50 border border-rose-100 rounded-3xl space-y-4">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="text-rose-500" size={18} />
+                  <h4 className="text-sm font-black text-rose-900 uppercase tracking-widest">Cancellation Request Details</h4>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-black text-rose-400 uppercase">Reason for Cancellation</p>
+                    <p className="text-xs font-bold text-rose-900 leading-relaxed bg-white/50 p-3 rounded-xl border border-rose-100">
+                      {selectedBooking.cancellationReason || 'No reason provided'}
+                    </p>
                   </div>
-
-                  {(() => {
-                    const refund = calculateRefund(selectedBooking);
-                    return (
-                      <div className="space-y-6">
-                        <div className="bg-white/40 p-4 rounded-xl border border-rose-100/50 mb-6">
-                           <div className="flex justify-between items-start mb-3">
-                             <div>
-                               <p className="text-[9px] font-black text-rose-400 uppercase tracking-widest">Cancellation Reason</p>
-                               <p className="text-sm font-bold text-rose-900">{(selectedBooking as any).cancellationReason || 'Not provided'}</p>
-                             </div>
-                             <div className="text-right">
-                               <p className="text-[9px] font-black text-rose-400 uppercase tracking-widest">Re-booking Choice</p>
-                               <Badge variant={(selectedBooking as any).wantsNewTutor ? 'success' : 'default'} className="mt-1">
-                                 {(selectedBooking as any).wantsNewTutor ? 'Wants New Tutor' : 'Full Exit'}
-                               </Badge>
-                             </div>
-                           </div>
-                           {(selectedBooking as any).wantsNewTutor && (
-                             <p className="text-[10px] text-emerald-600 font-bold flex items-center gap-1.5 mt-2 bg-emerald-50/50 p-2 rounded-lg border border-emerald-100">
-                               <RefreshCw size={10} /> Refund will be credited to student wallet balance.
-                             </p>
-                           )}
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-4">
-                            <div className="flex flex-col">
-                              <span className="text-[9px] font-black text-rose-400 uppercase tracking-widest">Usage Period</span>
-                              <span className="text-sm font-bold text-rose-900">{refund.breakdown?.diffDays || 0} Days Used ({refund.breakdown?.attendedClasses || 0} Classes)</span>
-                            </div>
-                            <div className="flex flex-col">
-                              <span className="text-[9px] font-black text-rose-400 uppercase tracking-widest">Platform Fee (17%)</span>
-                              <span className="text-sm font-bold text-rose-900">₹{refund.breakdown?.platformFee || 0}</span>
-                            </div>
-                          </div>
-                          <div className="bg-white/50 backdrop-blur-sm rounded-2xl p-4 border border-rose-100/50 flex flex-col justify-center text-center">
-                             <span className="text-[9px] font-black text-rose-400 uppercase tracking-widest mb-1">Calculated Refund</span>
-                             <span className="text-3xl font-serif font-black italic text-rose-600">₹{refund.refundAmount}</span>
-                          </div>
-                        </div>
-
-                        {!refund.eligible && (
-                          <p className="text-xs text-rose-500 font-bold bg-white/50 p-3 rounded-xl border border-rose-100 italic">
-                             Warning: This booking is {refund.reason}. Standard refund policy may not apply.
-                          </p>
-                        )}
-
-                        <div className="flex gap-3 pt-4">
-                          <Button 
-                            className="flex-1 bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-600/20 py-6 rounded-2xl font-black uppercase text-[10px] tracking-widest"
-                            onClick={() => handleUpdateStatus(selectedBooking.id, 'cancelled')}
-                            disabled={isProcessing}
-                          >
-                            <CheckCircle2 size={16} className="mr-2" /> Approve & Refund
-                          </Button>
-                          <Button 
-                            variant="danger"
-                            className="flex-1 py-6 rounded-2xl font-black uppercase text-[10px] tracking-widest"
-                            onClick={() => handleUpdateStatus(selectedBooking.id, 'confirmed')}
-                            disabled={isProcessing}
-                          >
-                            <XCircle size={16} className="mr-2" /> Reject Request
-                          </Button>
-                        </div>
-                      </div>
-                    );
-                  })()}
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-[10px] font-black text-rose-400 uppercase mb-1">Student Preference</p>
+                      <Badge variant={selectedBooking.bookedAnotherTutor ? 'success' : 'default'} className="text-[9px]">
+                        {selectedBooking.bookedAnotherTutor ? 'Wants Another Tutor' : 'No New Tutor'}
+                      </Badge>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black text-rose-400 uppercase mb-1">Refund Preference</p>
+                      <Badge variant={selectedBooking.wantsRefund ? 'warning' : 'default'} className="text-[9px]">
+                        {selectedBooking.wantsRefund ? 'Requested Refund' : 'No Refund Req'}
+                      </Badge>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
 
             {/* General Actions for other statuses */}
-            {selectedBooking.status !== 'pending_cancellation' && (
-              <div className="flex gap-3 pt-4">
-                <Button 
-                  variant="outline" 
-                  className="flex-1 py-4 rounded-xl font-bold"
-                  onClick={() => handleUpdateStatus(selectedBooking.id, selectedBooking.status === 'cancelled' ? 'confirmed' : 'cancelled')}
-                  disabled={isProcessing}
-                >
-                  {selectedBooking.status === 'cancelled' ? 'Restore Booking' : 'Manual Cancel'}
-                </Button>
-                <Button 
-                  variant="ghost" 
-                  className="px-6 rounded-xl font-bold"
-                  onClick={() => setSelectedBooking(null)}
-                >
-                  Close
-                </Button>
+              <div className="flex flex-col gap-3 pt-4">
+                {selectedBooking.status === 'cancelled' && selectedBooking.refundStatus !== 'completed' && (
+                  <Button 
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-lg shadow-emerald-600/10"
+                    onClick={() => handleMarkRefundPaid(selectedBooking.id)}
+                    disabled={isProcessing}
+                  >
+                    <CheckCircle2 size={16} className="mr-2" /> Mark Manual Refund as Paid (UPI)
+                  </Button>
+                )}
+                <div className="flex gap-3">
+                  <Button 
+                    variant="outline" 
+                    className="flex-1 py-4 rounded-xl font-bold"
+                    onClick={() => handleUpdateStatus(selectedBooking.id, selectedBooking.status === 'cancelled' ? 'confirmed' : 'cancelled')}
+                    disabled={isProcessing}
+                  >
+                    {selectedBooking.status === 'cancelled' ? 'Restore Booking' : 'Manual Cancel'}
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    className="px-6 rounded-xl font-bold"
+                    onClick={() => setSelectedBooking(null)}
+                  >
+                    Close
+                  </Button>
+                </div>
               </div>
-            )}
+
           </div>
         )}
       </Modal>

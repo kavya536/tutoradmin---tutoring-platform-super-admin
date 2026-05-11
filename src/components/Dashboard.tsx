@@ -11,7 +11,7 @@ import {
   Calendar,
 } from 'lucide-react';
 import { Card, Badge, Button } from './UI';
-import { motion, AnimatePresence, Variants } from 'framer-motion';
+import { motion, AnimatePresence, Variants } from 'motion/react';
 import { 
   AreaChart, 
   Area, 
@@ -20,22 +20,28 @@ import {
   Tooltip, 
   ResponsiveContainer,
 } from 'recharts';
-import { Tutor, Student, Booking, Payment } from '../types';
+import { Tutor, Student, Booking, Payment, LandingQuery } from '../types';
 
 interface DashboardProps {
   tutors: Tutor[];
   students: Student[];
   bookings: Booking[];
   payments: Payment[];
+  landingQueries: LandingQuery[];
   setActivePage: (page: string) => void;
 }
 
-export const Dashboard = ({ tutors, students, bookings, payments, setActivePage }: DashboardProps) => {
+export const Dashboard = ({ tutors, students, bookings, payments, landingQueries, setActivePage }: DashboardProps) => {
   const navigate = useNavigate();
   const [dateRange, setDateRange] = React.useState<'today' | '7days' | '30days' | '1year' | 'all'>('today');
   const [selectedStudent, setSelectedStudent] = React.useState<Student | null>(null);
   const [calOpen, setCalOpen] = React.useState(false);
   const calRef = React.useRef<HTMLDivElement>(null);
+  const feedbackFormRef = React.useRef<HTMLDivElement>(null);
+  const [respondingTo, setRespondingTo] = React.useState<string | null>(null);
+  const [adminResponseText, setAdminResponseText] = React.useState('');
+  const [isSendingResponse, setIsSendingResponse] = React.useState(false);
+  const [successMessage, setSuccessMessage] = React.useState<string | null>(null);
 
   // Close dropdowns on outside click
   React.useEffect(() => {
@@ -45,6 +51,46 @@ export const Dashboard = ({ tutors, students, bookings, payments, setActivePage 
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
+
+  const handleSendResponse = async (queryId: string) => {
+    if (!adminResponseText.trim()) return;
+    setIsSendingResponse(true);
+    try {
+      const hostname = window.location.hostname;
+      const response = await fetch(`http://${hostname}:5001/api/respond-to-inquiry`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ queryId, adminResponse: adminResponseText })
+      });
+
+      if (!response.ok) {
+        let errorInfo = `Server Error (${response.status})`;
+        try {
+          const errorData = await response.json();
+          if (errorData.message) errorInfo = errorData.message;
+        } catch (e) {
+          const text = await response.text().catch(() => '');
+          if (text) errorInfo += `: ${text.substring(0, 100)}`;
+        }
+        throw new Error(errorInfo);
+      }
+      
+      setSuccessMessage("Response sent successfully!");
+      setRespondingTo(null);
+      setAdminResponseText('');
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (err: any) {
+      console.error("Inquiry Response Error:", err);
+      setSuccessMessage("Error: " + err.message);
+      setTimeout(() => setSuccessMessage(null), 5000);
+    } finally {
+      setIsSendingResponse(false);
+    }
+  };
+
+  const scrollToFeedback = () => {
+    feedbackFormRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
 
   const periodLabel = dateRange === 'today' ? "Today's History" : dateRange === '7days' ? 'Last Week' : dateRange === '30days' ? 'Last Month' : dateRange === '1year' ? 'Last Year' : dateRange === 'all' ? 'All Time' : null;
 
@@ -117,7 +163,7 @@ export const Dashboard = ({ tutors, students, bookings, payments, setActivePage 
     { label: 'Total Tutors', value: tutors.length, icon: Users, trend: 'Live', color: 'text-blue-600', bg: 'bg-blue-50', page: 'tutors' },
     { label: 'Total Students', value: students.length, icon: UserRound, trend: 'Sync', color: 'text-purple-600', bg: 'bg-purple-50', page: 'students' },
     { label: 'Total Bookings', value: filteredBookings.length, icon: CalendarCheck, trend: 'Realtime', color: 'text-green-600', bg: 'bg-green-50', page: 'bookings' },
-    { label: 'Avg Rating', value: tutors.length > 0 ? (tutors.reduce((acc, t) => acc + (t.rating || 0), 0) / tutors.length).toFixed(1) : '0.0', icon: Star, trend: 'Rating', color: 'text-orange-600', bg: 'bg-orange-50', page: 'reviews' },
+    { label: 'Student Doubts', value: landingQueries.length, icon: ArrowUpRight, trend: 'Inquiry', color: 'text-rose-600', bg: 'bg-rose-50', page: 'dashboard' },
   ];
 
   const itemVariants: Variants = {
@@ -219,7 +265,13 @@ export const Dashboard = ({ tutors, students, bookings, payments, setActivePage 
           >
             <Card 
               className="p-6 lg:hover:shadow-2xl lg:hover:-translate-y-1 transition-all cursor-pointer group active:scale-95 border-b-4 border-transparent lg:hover:border-primary/20"
-              onClick={() => { navigate(`/${stat.page}`); setActivePage(stat.page); }}
+              onClick={() => { 
+                if (stat.label === 'Student Doubts') {
+                  scrollToFeedback();
+                } else {
+                  navigate(`/${stat.page}`); setActivePage(stat.page); 
+                }
+              }}
             >
               <div className="flex items-start justify-between">
                 <div className={cn('p-3 rounded-xl transition-colors group-hover:scale-110 duration-300', stat.bg)}>
@@ -293,8 +345,8 @@ export const Dashboard = ({ tutors, students, bookings, payments, setActivePage 
         <Card className="p-6">
           <h3 className="text-lg font-bold text-gray-900 mb-8">Top Performing Tutors</h3>
           <div className="space-y-6">
-            {topTutorsDynamic.map((tutor) => (
-              <div key={tutor.name} className="space-y-2">
+            {topTutorsDynamic.map((tutor, idx) => (
+              <div key={`${tutor.name}-${idx}`} className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
                   <span className="font-bold text-gray-700">{tutor.name}</span>
                   <span className="font-black text-primary">{tutor.bookings} bookings</span>
@@ -332,7 +384,7 @@ export const Dashboard = ({ tutors, students, bookings, payments, setActivePage 
         <Card className="p-6">
           <h3 className="text-lg font-bold text-gray-900 mb-6">Recent Bookings</h3>
           <div className="space-y-4">
-            {filteredBookings.slice(0, 6).map((booking) => (
+            {filteredBookings.slice(0, 4).map((booking) => (
               <div 
                 key={booking.id} 
                 className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-all cursor-pointer group"
@@ -348,9 +400,6 @@ export const Dashboard = ({ tutors, students, bookings, payments, setActivePage 
                   <div>
                     <p className="text-sm font-bold text-gray-900">{booking.studentName} with {booking.tutorName}</p>
                     <p className="text-xs text-gray-500 font-medium">{booking.subject} • {booking.dateTime}</p>
-                    {booking.status === 'cancelled' && booking.cancellationReason && (
-                      <p className="text-xs text-red-500 font-bold mt-1 italic">Reason: {booking.cancellationReason}</p>
-                    )}
                   </div>
                 </div>
                 <Badge variant={booking.status === 'confirmed' ? 'success' : booking.status === 'pending' ? 'warning' : 'danger'}>
@@ -358,6 +407,107 @@ export const Dashboard = ({ tutors, students, bookings, payments, setActivePage 
                 </Badge>
               </div>
             ))}
+          </div>
+        </Card>
+
+        {/* Feedback Form Inquiries Section */}
+        <Card className="p-6" ref={feedbackFormRef}>
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-lg font-bold text-gray-900">Feedback Form</h3>
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-0.5">Student Doubts & Queries</p>
+            </div>
+            <Badge variant="warning">{landingQueries.length} Total</Badge>
+          </div>
+          
+          <div className="space-y-4">
+            {successMessage && (
+              <motion.div 
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                className={cn(
+                  "mb-4 p-3 rounded-xl text-center text-[10px] font-black uppercase tracking-widest border",
+                  successMessage.startsWith('Error') 
+                    ? "bg-rose-50 text-rose-600 border-rose-100" 
+                    : "bg-emerald-50 text-emerald-600 border-emerald-100"
+                )}
+              >
+                {successMessage}
+              </motion.div>
+            )}
+            {landingQueries.length === 0 ? (
+              <div className="text-center py-10 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                <p className="text-sm font-bold text-gray-400">No inquiries yet.</p>
+              </div>
+            ) : (
+              landingQueries.map((query) => (
+                <div 
+                  key={query.id} 
+                  className="p-5 bg-gray-50 rounded-2xl border border-gray-100 hover:border-primary/20 transition-all group"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-rose-500 shadow-sm font-black text-sm">
+                        {query.name.slice(0, 2).toUpperCase()}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="text-base font-bold text-gray-900">{query.name}</p>
+                          {query.status === 'responded' && <Badge variant="success">Responded</Badge>}
+                        </div>
+                        <p className="text-[11px] text-gray-500 font-medium">{query.email} • {query.phone}</p>
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">
+                      {query.createdAt?.toDate ? query.createdAt.toDate().toLocaleDateString() : 'Recent'}
+                    </p>
+                  </div>
+                  <div className="mt-4 p-4 bg-white rounded-xl border border-gray-100 italic text-[13px] text-gray-600 leading-relaxed shadow-sm">
+                    "{query.message}"
+                  </div>
+
+                  {query.adminResponse && (
+                    <div className="mt-4 p-4 bg-primary/5 rounded-xl border border-primary/10 text-[13px] text-primary leading-relaxed">
+                      <p className="text-[10px] font-black uppercase tracking-widest mb-1 opacity-60">Admin Response:</p>
+                      {query.adminResponse}
+                    </div>
+                  )}
+
+                  <div className="mt-4 flex justify-end">
+                    {respondingTo === query.id ? (
+                      <div className="w-full space-y-3 animate-in slide-in-from-top-2 duration-200">
+                        <textarea 
+                          className="w-full p-4 rounded-xl border border-gray-200 text-sm focus:ring-4 focus:ring-primary/5 focus:border-primary outline-none transition-all resize-none"
+                          placeholder="Type your response here... (Student will receive this via email)"
+                          rows={3}
+                          value={adminResponseText}
+                          onChange={(e) => setAdminResponseText(e.target.value)}
+                        />
+                        <div className="flex justify-end gap-3">
+                          <Button variant="outline" size="sm" onClick={() => setRespondingTo(null)}>Cancel</Button>
+                          <Button 
+                            size="sm" 
+                            disabled={isSendingResponse || !adminResponseText.trim()} 
+                            onClick={() => handleSendResponse(query.id)}
+                          >
+                            {isSendingResponse ? 'Sending...' : 'Send Response'}
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <Button 
+                        variant={query.status === 'responded' ? 'outline' : 'primary'} 
+                        size="sm" 
+                        onClick={() => setRespondingTo(query.id)}
+                      >
+                        {query.status === 'responded' ? 'Follow Up' : 'Respond'}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </Card>
       </motion.div>
