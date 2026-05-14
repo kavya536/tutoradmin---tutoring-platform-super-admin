@@ -93,7 +93,7 @@ export const sendPlatformEmail = async (
             </p>
             
             <div style="margin: 35px 0; text-align: center;">
-              <a href="https://student-hub.eduqra.com" style="display: inline-block; background: #1e40af; color: #ffffff; padding: 18px 40px; border-radius: 12px; font-weight: 800; text-decoration: none; box-shadow: 0 4px 14px rgba(30, 64, 175, 0.3);">Login to Student Hub</a>
+              <a href="https://192.168.1.113:3006/login" style="display: inline-block; background: #1e40af; color: #ffffff; padding: 18px 40px; border-radius: 12px; font-weight: 800; text-decoration: none; box-shadow: 0 4px 14px rgba(30, 64, 175, 0.3);">Login to Student Hub</a>
             </div>
             
             <p style="font-size: 14px; color: #94a3b8; margin-top: 30px; text-align: center; border-top: 1px solid #f1f5f9; padding-top: 25px;">Eduqra Learning Services • Your Future, Personalized</p>
@@ -131,7 +131,7 @@ export const sendPlatformEmail = async (
             </div>
 
             <div style="text-align: center;">
-              <a href="https://student-hub.eduqra.com" style="display: inline-block; background: #7c3aed; color: #ffffff; padding: 15px 30px; border-radius: 10px; font-weight: 700; text-decoration: none;">View on Dashboard</a>
+              <a href="https://192.168.1.113:3006/login" style="display: inline-block; background: #7c3aed; color: #ffffff; padding: 15px 30px; border-radius: 10px; font-weight: 700; text-decoration: none;">View on Dashboard</a>
             </div>
           </div>
         </div>

@@ -27,6 +27,7 @@ import {
   Eye,
   UserX,
   RotateCcw,
+  RefreshCw,
   Clock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -486,7 +487,7 @@ export const TutorsManagement = ({
       {/* Main List */}
       <Card className="border-none shadow-xl shadow-gray-100/50 relative z-0">
         <div className="overflow-visible pb-32">
-          <Table headers={['Tutor details', 'Expertise', 'Active Bookings', 'Status', 'Actions']} className="overflow-visible">
+          <Table headers={['Tutor details', 'Expertise', 'Active Bookings', 'Registered On', 'Status', 'Actions']} className="overflow-visible">
           <AnimatePresence mode="popLayout">
             {filteredTutors.map((tutor) => (
               <motion.tr 
@@ -521,6 +522,11 @@ export const TutorsManagement = ({
                     <div>
                       <div className="flex items-center gap-2 mb-1.5">
                         <p className="text-sm font-black text-gray-900 leading-none">{tutor.name}</p>
+                        {tutor.rejectionCount && tutor.rejectionCount > 0 && (
+                          <span className="bg-amber-100 text-amber-700 text-[8px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-tighter flex items-center gap-1 animate-pulse" title={tutor.reAppliedAt ? `Last re-applied on: ${new Date(tutor.reAppliedAt).toLocaleString()}` : ''}>
+                            <RefreshCw size={8} /> Re-applied {tutor.reAppliedAt && `(${new Date(tutor.reAppliedAt).toLocaleDateString()})`}
+                          </span>
+                        )}
                         {/* Document Presence Indicator */}
                         <div className="flex gap-0.5">
                           {(tutor.documents?.identityProof || tutor.identityProof || tutor.identityPic || tutor.identityURL) && <div className="w-1.5 h-1.5 rounded-full bg-blue-500" title="ID Proof Present" />}
@@ -538,6 +544,9 @@ export const TutorsManagement = ({
                             <Phone size={12} /> {tutor.phone}
                           </span>
                         )}
+                        <span className="text-[10px] text-gray-400 font-bold flex items-center gap-1.5 mt-0.5">
+                          <Calendar size={10} /> {tutor.createdAt ? (tutor.createdAt.toDate ? tutor.createdAt.toDate().toLocaleDateString() : new Date(tutor.createdAt).toLocaleDateString()) : 'N/A'}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -568,6 +577,11 @@ export const TutorsManagement = ({
                     </span>
                     <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mt-1.5">Students</p>
                   </div>
+                </td>
+                <td className="px-6 py-5 text-center">
+                  <span className="text-[10px] font-bold text-gray-500 uppercase">
+                    {tutor.createdAt ? (tutor.createdAt.toDate ? tutor.createdAt.toDate().toLocaleString() : new Date(tutor.createdAt).toLocaleString()) : 'N/A'}
+                  </span>
                 </td>
                 <td className="px-6 py-5">
                   <Badge variant={tutor.status === 'approved' ? 'success' : tutor.status === 'pending' ? 'warning' : 'danger'}>
@@ -881,14 +895,16 @@ export const TutorsManagement = ({
                       type="pdf"
                       onViewFull={setFullViewDoc}
                     />
-                    <VerificationCard 
-                      title="Experience Certificate"
-                      subtitle="Professional Records"
-                      icon={<Award size={18} />}
-                      url={selectedTutor.experienceCert || selectedTutor.documents?.experienceCertificate || selectedTutor.experienceCertificate || selectedTutor.certificate || selectedTutor.certURL || selectedTutor.expDoc || selectedTutor.expURL || ''}
-                      type="pdf"
-                      onViewFull={setFullViewDoc}
-                    />
+                    {(selectedTutor.experienceCert || selectedTutor.documents?.experienceCertificate || selectedTutor.experienceCertificate || selectedTutor.certificate || selectedTutor.certURL || selectedTutor.expDoc || selectedTutor.expURL) && (
+                      <VerificationCard 
+                        title="Experience Certificate"
+                        subtitle="Professional Records"
+                        icon={<Award size={18} />}
+                        url={selectedTutor.experienceCert || selectedTutor.documents?.experienceCertificate || selectedTutor.experienceCertificate || selectedTutor.certificate || selectedTutor.certURL || selectedTutor.expDoc || selectedTutor.expURL || ''}
+                        type="pdf"
+                        onViewFull={setFullViewDoc}
+                      />
+                    )}
                   </div>
                 </div>
 
@@ -1178,15 +1194,17 @@ export const TutorsManagement = ({
                   type="pdf"
                   onViewFull={setFullViewDoc}
                 />
-                {/* EXPERIENCE */}
-                <VerificationCard 
-                  title="Experience Certificate"
-                  subtitle="Professional Records"
-                  icon={<Award size={18} />}
-                  url={verifyingTutor.experienceCert || verifyingTutor.documents?.experienceCertificate || verifyingTutor.experienceCertificate || verifyingTutor.certificate || verifyingTutor.certURL || verifyingTutor.expDoc || verifyingTutor.expURL || ''}
-                  type="pdf"
-                  onViewFull={setFullViewDoc}
-                />
+                {/* EXPERIENCE - Conditional render based on presence */}
+                {(verifyingTutor.experienceCert || verifyingTutor.documents?.experienceCertificate || verifyingTutor.experienceCertificate || verifyingTutor.certificate || verifyingTutor.certURL || verifyingTutor.expDoc || verifyingTutor.expURL) ? (
+                  <VerificationCard 
+                    title="Experience Certificate"
+                    subtitle="Professional Records"
+                    icon={<Award size={18} />}
+                    url={verifyingTutor.experienceCert || verifyingTutor.documents?.experienceCertificate || verifyingTutor.experienceCertificate || verifyingTutor.certificate || verifyingTutor.certURL || verifyingTutor.expDoc || verifyingTutor.expURL || ''}
+                    type="pdf"
+                    onViewFull={setFullViewDoc}
+                  />
+                ) : null}
               </div>
             </div>
 

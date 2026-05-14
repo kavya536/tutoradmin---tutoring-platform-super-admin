@@ -220,7 +220,7 @@ export const StudentsManagement = ({ students, bookings, onToggleBlock, initialS
       </motion.div>
 
       <Card>
-        <Table headers={['Student', 'Class', 'Subjects', 'Bookings', 'Status', 'Actions']}>
+        <Table headers={['Student', 'Class', 'Subjects', 'Bookings', 'Registered On', 'Status', 'Actions']}>
           <AnimatePresence mode="popLayout">
             {filteredStudents.map((student, index) => {
               const isMenuOpen = openMenuId === student.id;
@@ -269,6 +269,11 @@ export const StudentsManagement = ({ students, bookings, onToggleBlock, initialS
                   <span className="text-sm font-black text-gray-900">{student.totalBookings || 0}</span>
                   <span className="text-[10px] font-bold text-gray-400 uppercase">Total</span>
                 </div>
+              </td>
+              <td className="px-4 sm:px-6 py-3 sm:py-4 text-center">
+                <span className="text-[10px] font-bold text-gray-500 uppercase">
+                  {(student as any).createdAt ? ((student as any).createdAt.toDate ? (student as any).createdAt.toDate().toLocaleString() : new Date((student as any).createdAt).toLocaleString()) : 'N/A'}
+                </span>
               </td>
               <td className="px-4 sm:px-6 py-3 sm:py-4">
                 <Badge variant={(student.status || 'active') === 'active' ? 'success' : 'danger'}>

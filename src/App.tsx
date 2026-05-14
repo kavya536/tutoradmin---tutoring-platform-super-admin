@@ -157,9 +157,26 @@ export default function App() {
   React.useEffect(() => {
     if (!isAuthenticated) return;
     
+    // Helper to get timestamp in milliseconds (prioritizing Session Date for Bookings)
+    const getSortMs = (item: any) => {
+       if (item.date) {
+          const timeStr = item.time || '00:00';
+          const d = new Date(`${item.date} ${timeStr}`);
+          if (!isNaN(d.getTime())) return d.getTime();
+          const d2 = new Date(item.date);
+          if (!isNaN(d2.getTime())) return d2.getTime();
+       }
+       if (item.createdAt?.toMillis) return item.createdAt.toMillis();
+       if (item.createdAt?.seconds) return item.createdAt.seconds * 1000;
+       if (item.timestamp?.toMillis) return item.timestamp.toMillis();
+       if (item.timestamp?.seconds) return item.timestamp.seconds * 1000;
+       return 0;
+    };
+
     // 1. Unified Synchronization for all Tutors
     const unsubUsers = onSnapshot(query(collection(db, 'users'), where('role', 'in', ['tutor', 'Tutor'])), (snap) => {
       const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+      data.sort((a, b) => getSortMs(b) - getSortMs(a));
       setUsersData(data);
     }, (err) => {
       console.error("❌ [FIRESTORE ERROR] Users Query:", err);
@@ -168,17 +185,20 @@ export default function App() {
     // 2. Sync Students
     const unsubStudents = onSnapshot(query(collection(db, 'students')), (snap) => {
       const allStudents = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+      allStudents.sort((a, b) => getSortMs(b) - getSortMs(a));
       // Filter out any users with admin role if they accidentally ended up in students collection
       setStudents(allStudents.filter((s: any) => s.role !== 'admin' && s.role !== 'super-admin' && s.email !== 'admin@eduqra.com'));
     });
 
     // 3. Sync Bookings
     const unsubBookings = onSnapshot(query(collection(db, 'bookings')), (snap) => {
-      setBookings(snap.docs.map(d => ({ id: d.id, ...d.data() } as any)));
+      const allBookings = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+      allBookings.sort((a, b) => getSortMs(b) - getSortMs(a));
+      setBookings(allBookings);
     });
 
     // 4. Sync Notifications
-    const unsubNotifs = onSnapshot(query(collection(db, 'admin_notifications'), orderBy('time', 'desc')), (snap) => {
+    const unsubNotifs = onSnapshot(query(collection(db, 'admin_notifications')), (snap) => {
         const newNotifs = snap.docs.map(d => {
           const data = d.data();
           let timeStr = 'Just now';
@@ -199,8 +219,22 @@ export default function App() {
             }
           }
           
-          return { id: d.id, ...data, time: timeStr } as any;
+          return { id: d.id, ...data, time: timeStr, _rawCreatedAt: data.createdAt, _rawTimestamp: data.timestamp, _rawTime: data.time } as any;
         });
+
+        const getMs = (item: any) => {
+           if (item._rawCreatedAt?.toMillis) return item._rawCreatedAt.toMillis();
+           if (item._rawCreatedAt?.seconds) return item._rawCreatedAt.seconds * 1000;
+           if (item._rawTimestamp?.toMillis) return item._rawTimestamp.toMillis();
+           if (item._rawTimestamp?.seconds) return item._rawTimestamp.seconds * 1000;
+           if (item._rawTime) {
+             const d = new Date(item._rawTime);
+             if (!isNaN(d.getTime())) return d.getTime();
+           }
+           return Date.now(); // Fallback for "Just now" or invalid strings to put them at top
+        };
+        
+        newNotifs.sort((a, b) => getMs(b) - getMs(a));
 
         // Trigger Toast for NEW unread notifications
         snap.docChanges().forEach(change => {

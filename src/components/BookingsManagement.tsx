@@ -291,7 +291,7 @@ export const BookingsManagement = ({ bookings }: BookingsManagementProps) => {
       <Tabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
 
       <Card className="border-none shadow-xl shadow-gray-100/50">
-        <Table headers={['Student', 'Tutor', 'Subject', 'Date & Time', 'Status']}>
+        <Table headers={['Student', 'Tutor', 'Subject', 'Date & Time', 'Booked On', 'Status']}>
           <AnimatePresence mode="popLayout">
             {filteredBookings.map((booking) => (
               <motion.tr 
@@ -347,6 +347,11 @@ export const BookingsManagement = ({ bookings }: BookingsManagementProps) => {
                     </span>
                   </div>
                 </div>
+              </td>
+              <td className="px-4 sm:px-6 py-4 text-center">
+                <span className="text-[10px] font-bold text-gray-500 uppercase">
+                  {(booking as any).createdAt ? ((booking as any).createdAt.toDate ? (booking as any).createdAt.toDate().toLocaleString() : new Date((booking as any).createdAt).toLocaleString()) : 'N/A'}
+                </span>
               </td>
               <td className="px-4 sm:px-6 py-4">
                 <Badge 

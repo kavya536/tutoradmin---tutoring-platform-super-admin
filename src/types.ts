@@ -20,6 +20,7 @@ export interface Tutor {
   upiId?: string;
   registrationDate?: string;
   rejectionCount?: number;
+  reAppliedAt?: string;
   approvalHistory?: RejectionHistory[];
   // Registration stores qualification (not subjects array)
   qualification?: string;
@@ -58,6 +59,9 @@ export interface Tutor {
     degreeCertificate?: string;
     experienceCertificate?: string;
     demoVideo?: string;
+    educationCert?: string;
+    identityPic?: string;
+    profilePic?: string;
   };
   rating?: number;
   rejectionReason?: string;
